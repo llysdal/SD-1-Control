@@ -4,12 +4,19 @@ from tkinter import N,S,E,W, HORIZONTAL, VERTICAL, BROWSE, filedialog, ttk, CENT
 from math import exp
 import wave, struct
 import json
+from copy import deepcopy
 
 midiKeys = []
 for o in range(-1, 10):
   for k in range(0,12):
     midiKeys.append(('C','C#','D','D#','E','F','F#','G','G#','A','A#','B')[k] + str(o))
 midiKeys = midiKeys[0:128]
+
+envTimes = [0.00, 0.01, 0.02, 0.03, 0.04, 0.06, 0.07, 0.08, 0.08, 0.09, 0.10, 0.11, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16,
+            0.17, 0.19, 0.20, 0.22, 0.23, 0.25, 0.27, 0.29, 0.31, 0.33, 0.35, 0.38, 0.41, 0.44, 0.47, 0.50, 0.54, 0.58,
+            0.62, 0.66, 0.71, 0.76, 0.82, 0.88, 0.94, 1.0, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.0, 2.1, 2.3,
+            2.4, 2.6, 2.8, 3.0, 3.2, 3.5, 3.7, 4.0, 4.3, 4.6, 4.9, 5.3, 5.7, 6.1, 6.5, 7.0, 7.5, 8.1, 8.6, 9.3, 9.9, 10,
+            11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 26, 28, 30, 32, 34, 37, 39, 42, 45, 49]
 
 black = "#212121"
 red = "#9D0000"
@@ -198,44 +205,62 @@ class SD1main(Application):
     self.init(master, titlefont, textfont, numberfont)
     self.setup(sd)
     
-  def envDrag(self, event, envVars, step):
+  def envDrag(self, event, voice, env, step):
+    v = self.voices[voice]
+    if env == 1: envVars = v.env1Vars
+    elif env == 2: envVars = v.env2Vars
+    elif env == 3: envVars = v.env3Vars
+    
     rectSize = 4
-    w = 300-rectSize
+    w = 500-rectSize
     h = 100
     if step == 0:
       envVars[0][0] = min(127, max(0, 127 - int(event.y/h * 127)))
     elif step == 1:
       envVars[0][1] = min(127, max(0, 127 - int(event.y/h * 127)))
-      envVars[1][0] = min(99, max(0, int((event.x-rectSize)/(w/5) * 99)))
+      envVars[1][0] = min(99, max(0, int((event.x-rectSize)/(w/6) * 99)))
     elif step == 2:
-      offset = w/5*envVars[1][0]/99
+      offset = w/6*envVars[1][0]/99
       envVars[0][2] = min(127, max(0, 127 - int(event.y/h * 127)))
-      envVars[1][1] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/5) * 99)))
+      envVars[1][1] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     elif step == 3:
-      offset = w/5*envVars[1][0]/99 + w/5*envVars[1][1]/99
+      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99
       envVars[0][3] = min(127, max(0, 127 - int(event.y/h * 127)))
-      envVars[1][2] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/5) * 99)))
+      envVars[1][2] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     elif step == 4:
-      offset = w/5*envVars[1][0]/99 + w/5*envVars[1][1]/99 + w/5*envVars[1][2]/99
+      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99 + w/6*envVars[1][2]/99
       envVars[0][4] = min(127, max(0, 127 - int(event.y/h * 127)))
-      envVars[1][3] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/5) * 99)))
+      envVars[1][3] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     elif step == 5:
-      offset = w/5*envVars[1][0]/99 + w/5*envVars[1][1]/99 + w/5*envVars[1][2]/99 + w/5*envVars[1][3]/99
-      envVars[1][4] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/5) * 99)))
+      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99 + w/6*envVars[1][2]/99 + w/6*envVars[1][3]/99 + w/6
+      envVars[1][4] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     
   def updateEnvs(self):
     rectSize = 4
-    w = 300-rectSize
+    w = 500-rectSize
     h = 100
     
     for voice in self.voices:
-      for env, envVars in [(voice.env1, voice.env1Vars), (voice.env2, voice.env2Vars), (voice.env3, voice.env3Vars)]:
+      for envIndex, (env, envVars) in enumerate([(voice.env1, voice.env1Vars), (voice.env2, voice.env2Vars), (voice.env3, voice.env3Vars)]):
         lastPoint = (rectSize,0)
         for step, (level, duration) in enumerate(zip([*envVars[0], 0], [0, *envVars[1]])):
-          newPoint = (lastPoint[0] + w/5*duration/99, (h-rectSize)-(h-rectSize*2)*level/127)
-          if step > 0:
+          newPoint = (lastPoint[0] + w/6*duration/99, (h-rectSize)-(h-rectSize*2)*level/127)
+          if step == 5:
+            line = env.find_withtag(f'line{step-1}')
+            env.coords(line, lastPoint[0], lastPoint[1], lastPoint[0]+w/6, lastPoint[1])
+            lastPoint = (lastPoint[0]+w/6, lastPoint[1])
+            newPoint = (lastPoint[0] + w/6*duration/99, (h-rectSize)-(h-rectSize*2)*level/127)
+            line = env.find_withtag(f'line{step}')
+            env.coords(line, lastPoint[0], lastPoint[1], newPoint[0], newPoint[1])
+          elif step > 0:
             line = env.find_withtag(f'line{step-1}')
             env.coords(line, lastPoint[0], lastPoint[1], newPoint[0], newPoint[1])
+          
+          if step > 0: 
+            durText = env.find_withtag(f'duration{step-1}')
+            env.coords(durText, (newPoint[0]-lastPoint[0])/2+lastPoint[0], (newPoint[1]-lastPoint[1])/2+lastPoint[1])
+            env.itemconfigure(durText, text=f'{envTimes[duration]}s')
+          
           rect = env.find_withtag(f'step{step}')
           env.coords(rect, newPoint[0]-rectSize, newPoint[1]-rectSize, newPoint[0]+rectSize, newPoint[1]+rectSize)
           lastPoint = newPoint
@@ -253,6 +278,33 @@ class SD1main(Application):
     else:
       self.sd.changeParameter(f'voice{voice}.envelopes.env{env}.{["", "peakLevel", "breakpoint1Level", "breakpoint2Level", "sustainLevel"][step]}', envVars[0][step])
       self.sd.changeParameter(f'voice{voice}.envelopes.env{env}.{["attackTime", "decay1Time", "decay2Time", "decay3Time", ""][step-1]}', envVars[1][step-1])
+
+  def copyEnvelope(self, voice, env):
+    if not self.envelopeCopy:
+      for v in self.voices:
+        for e in [v.env1Context, v.env2Context, v.env3Context]:
+          e.entryconfig("Paste", state=tk.ACTIVE)
+    
+    v = self.voices[voice]
+    
+    if env == 1: self.envelopeCopy = deepcopy(v.env1Vars)
+    elif env == 2: self.envelopeCopy = deepcopy(v.env2Vars)
+    elif env == 3: self.envelopeCopy = deepcopy(v.env3Vars)
+  
+  def pasteEnvelope(self, voice, env):
+    if not self.envelopeCopy: 
+      return
+    
+    v = self.voices[voice]
+    
+    if env == 1: v.env1Vars = deepcopy(self.envelopeCopy)
+    elif env == 2: v.env2Vars = deepcopy(self.envelopeCopy)
+    elif env == 3: v.env3Vars = deepcopy(self.envelopeCopy)
+
+  def onWaveClassChange(self, voice, value):
+    c = ['Waveform', 'Inharmonic', 'Transwave', 'Multi-wave', 'Sampled wave'].index(value)
+    v = self.voices[voice]
+
 
   def setup(self, sd):
     self.master.title('Ensoniq SD-1 Main Control')
@@ -293,6 +345,8 @@ class SD1main(Application):
     voice4Tab = self.createTab(voiceTabs, 'Voice 5')
     voice5Tab = self.createTab(voiceTabs, 'Voice 6')
     
+    self.envelopeCopy = None
+    
     self.voices = []
     for v in range(6):
       self.voices.append(Application())
@@ -303,32 +357,63 @@ class SD1main(Application):
       c = 0
       r = 0
       
-      f.createText((c, r), 'Envelope 1')
-      f.env1 = f.createCanvas((c, r+1), size=(300,100))
-      f.env1Vars = ([0, 127, 100, 127, 50], [5, 99, 25, 50, 20])
-
-      f.createText((c + 1, r), 'Envelope 2')
-      f.env2 = f.createCanvas((c + 1, r+1), size=(300,100))
-      f.env2Vars = ([0, 127, 100, 127, 50], [5, 99, 25, 50, 20])
-        
-      f.createText((c + 2, r), 'Envelope 3')
-      f.env3 = f.createCanvas((c + 2, r+1), size=(300,100))
-      f.env3Vars = ([0, 127, 100, 127, 50], [5, 99, 25, 50, 20])
+      f.createTitle((c, r), 'Wave')
+      f.createText((c, r+1), 'Class')
+      f.waveclass = f.createDropdown((c+1, r+1), values=['Waveform', 'Inharmonic', 'Transwave', 'Multi-wave', 'Sampled wave'], start = 'Waveform', command=lambda value, voice=v, gui=self: gui.onWaveClassChange(voice, value))
+      f.createText((c, r+2), 'Waveform')
+      f.waveform = f.createDropdown((c+1, r+2), values=['Loading...'], start = 'Loading...')
       
-      for i in range(5): 
+      c += 10
+      r += 0
+      
+      def envelopeContextMenu(event, menu):
+        try:
+          menu.tk_popup(event.x_root, event.y_root)
+        finally:
+          menu.grab_release()
+      
+      f.createTitle((c, r), 'Envelope 1')
+      f.env1 = f.createCanvas((c, r+1), size=(500,100))
+      f.env1Vars = [[0, 127, 100, 127, 50], [5, 99, 25, 50, 20]]
+      f.env1Context = tk.Menu(f.frame, tearoff=0)
+      f.env1Context.add_command(label='Copy', command=lambda voice=v, gui=self: gui.copyEnvelope(voice, 1))
+      f.env1Context.add_command(label='Paste', state=tk.DISABLED, command=lambda voice=v, gui=self: gui.pasteEnvelope(voice, 1))
+      f.env1.bind("<Button-3>", lambda event, menu=f.env1Context: envelopeContextMenu(event, menu))
+
+      f.createTitle((c + 1, r), 'Envelope 2')
+      f.env2 = f.createCanvas((c + 1, r+1), size=(500,100))
+      f.env2Vars = [[0, 127, 100, 127, 50], [5, 99, 25, 50, 20]]
+      f.env2Context = tk.Menu(f.frame, tearoff=0)
+      f.env2Context.add_command(label='Copy', command=lambda voice=v, gui=self: gui.copyEnvelope(voice, 2))
+      f.env2Context.add_command(label='Paste', state=tk.DISABLED, command=lambda voice=v, gui=self: gui.pasteEnvelope(voice, 2))
+      f.env2.bind("<Button-3>", lambda event, menu=f.env2Context: envelopeContextMenu(event, menu))
+        
+      f.createTitle((c + 2, r), 'Envelope 3')
+      f.env3 = f.createCanvas((c + 2, r+1), size=(500,100))
+      f.env3Vars = [[0, 127, 100, 127, 50], [5, 99, 25, 50, 20]]
+      f.env3Context = tk.Menu(f.frame, tearoff=0)
+      f.env3Context.add_command(label='Copy', command=lambda voice=v, gui=self: gui.copyEnvelope(voice, 3))
+      f.env3Context.add_command(label='Paste', state=tk.DISABLED, command=lambda voice=v, gui=self: gui.pasteEnvelope(voice, 3))
+      f.env3.bind("<Button-3>", lambda event, menu=f.env3Context: envelopeContextMenu(event, menu))
+      
+      for i in range(6): 
         line = f.env1.create_line(0, 0, 0, 0, tags=(f'line{i}'), fill = '#2b7cff')
         line = f.env2.create_line(0, 0, 0, 0, tags=(f'line{i}'), fill = '#2b7cff')
         line = f.env3.create_line(0, 0, 0, 0, tags=(f'line{i}'), fill = '#2b7cff')
-      for i in range(6): 
+        
         rect = f.env1.create_rectangle(0, 0, 0, 0, tags=(f'step{i}'), fill = '#2b7cff')
-        f.env1.tag_bind(rect, '<B1-Motion>', lambda event, envVars=f.env1Vars, step=i, gui=self: gui.envDrag(event, envVars, step))
+        f.env1.tag_bind(rect, '<B1-Motion>', lambda event, voice=v, step=i, gui=self: gui.envDrag(event, voice, 1, step))
         f.env1.tag_bind(rect, '<ButtonRelease-1>', lambda event, voice=v, step=i, gui=self: gui.emitEnv(event, voice, 1, step))
         rect = f.env2.create_rectangle(0, 0, 0, 0, tags=(f'step{i}'), fill = '#2b7cff')
-        f.env2.tag_bind(rect, '<B1-Motion>', lambda event, envVars=f.env2Vars, step=i, gui=self: gui.envDrag(event, envVars, step))
-        f.env2.tag_bind(rect, '<ButtonRelease-1>', lambda event, voice=v, step=i, gui=self: gui.emitEnv(event, voice, 2, step))
+        f.env2.tag_bind(rect, '<B1-Motion>', lambda event, voice=v, step=i, gui=self: gui.envDrag(event, voice, 2, step))
+        f.env2.tag_bind(rect, '<ButtonRelease-1>', lambda event, voice=v, step=i, gui=self: gui.emitEnv(event, voice, 2, step))       
         rect = f.env3.create_rectangle(0, 0, 0, 0, tags=(f'step{i}'), fill = '#2b7cff')
-        f.env3.tag_bind(rect, '<B1-Motion>', lambda event, envVars=f.env3Vars, step=i, gui=self: gui.envDrag(event, envVars, step))
+        f.env3.tag_bind(rect, '<B1-Motion>', lambda event, voice=v, step=i, gui=self: gui.envDrag(event, voice, 3, step))
         f.env3.tag_bind(rect, '<ButtonRelease-1>', lambda event, voice=v, step=i, gui=self: gui.emitEnv(event, voice, 3, step))
+        
+        f.env1.create_text(0, 0, tags=(f'duration{i}'), fill = '#ffffff')
+        f.env2.create_text(0, 0, tags=(f'duration{i}'), fill = '#ffffff')
+        f.env3.create_text(0, 0, tags=(f'duration{i}'), fill = '#ffffff')
       
       #self.filtercutoff = self.createSlider((0, 1), (0,127), frame=voiceTab, command = lambda v, sd=sd, i=i: sd.changeParameter(f'voice{i}.filters.filter1.cutoff', int(v)))
     
