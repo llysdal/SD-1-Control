@@ -1,0 +1,133 @@
+from enum import Enum
+
+class Button(Enum):
+  #VFX
+  BANK0 = 0
+  BANK1 = 1
+  BANK2 = 2
+  BANK3 = 3
+  BANK4 = 4
+  BANK5 = 5
+  BANK6 = 6
+  BANK7 = 7
+  BANK8 = 8
+  BANK9 = 9
+  CART = 10
+  SOUNDS = 11
+  PRESETS = 12
+  STORAGE = 13
+  INC = 14
+  DEC = 15
+  SOFT0 = 16
+  SOFT1 = 17
+  SOFT2 = 18
+  SOFT3 = 19
+  SOFT4 = 20
+  SOFT5 = 21
+  MASTER = 22
+  MIDI_CONTROL = 25
+  PROGRAM_CONTROL = 27
+  MOD_MIXER = 28
+  WAVE = 29
+  PITCH = 33
+  PITCH_MOD = 34
+  FILTERS = 35
+  OUTPUT = 37
+  LFO = 40
+  ENV1 = 42
+  ENV2 = 45
+  ENV3 = 48
+  EFFECTS = 51
+  SELECT_VOICE = 60
+  COPY = 61
+  WRITE = 62
+  COMPARE = 63
+  VOLUME = 64
+  PAN = 65
+  TIMBRE = 66
+  KEY_ZONE = 67
+  TRANPOSE = 68
+  RELEASE = 69
+  PATCH_SELECT = 70
+  MIDI_PERFORMANCE = 73
+  EFFECTS_PERFORMANCE = 76
+  MULTI_A = 80
+  MULTI_B = 81
+  REPLACE_PROGRAM = 83
+  
+  #VFX-SD
+  SEQ_CONTROL = 54
+  CLICK = 57
+  LOCATE = 58
+  SEQUENCE_BANK_SELECT = 82
+  EDIT_SONG = 84
+  EDIT_SEQ = 85
+  EDIT_TRACK = 86
+  RECORD = 89
+  PLAY = 90
+  STOP = 92
+  
+buttonNames = {
+  0: 'BANK0',
+  1: 'BANK1',
+  2: 'BANK2',
+  3: 'BANK3',
+  4: 'BANK4',
+  5: 'BANK5',
+  6: 'BANK6',
+  7: 'BANK7',
+  8: 'BANK8',
+  9: 'BANK9',
+  10: 'CART',
+  11: 'SOUNDS',
+  12: 'PRESETS',
+  13: 'STORAGE',
+  14: 'INC',
+  15: 'DEC',
+  16: 'SOFT0',
+  17: 'SOFT1',
+  18: 'SOFT2',
+  19: 'SOFT3',
+  20: 'SOFT4',
+  21: 'SOFT5',
+  22: 'MASTER',
+  25: 'MIDI_CONTROL',
+  27: 'PROGRAM_CONTROL',
+  28: 'MOD_MIXER',
+  29: 'WAVE',
+  33: 'PITCH',
+  34: 'PITCH_MOD',
+  35: 'FILTERS',
+  37: 'OUTPUT',
+  40: 'LFO',
+  42: 'ENV1',
+  45: 'ENV2',
+  48: 'ENV3',
+  51: 'EFFECTS',
+  60: 'SELECT_VOICE',
+  61: 'COPY',
+  62: 'WRITE',
+  63: 'COMPARE',
+  64: 'VOLUME',
+  65: 'PAN',
+  66: 'TIMBRE',
+  67: 'KEY_ZONE',
+  68: 'TRANPOSE',
+  69: 'RELEASE',
+  70: 'PATCH_SELECT',
+  73: 'MIDI_PERFORMANCE',
+  76: 'EFFECTS_PERFORMANCE',
+  80: 'MULTI_A',
+  81: 'MULTI_B',
+  83: 'REPLACE_PROGRAM',
+  54: 'SEQ_CONTROL',
+  57: 'CLICK',
+  58: 'LOCATE',
+  82: 'SEQUENCE_BANK_SELECT',
+  84: 'EDIT_SONG',
+  85: 'EDIT_SEQ',
+  86: 'EDIT_TRACK',
+  89: 'RECORD',
+  90: 'PLAY',
+  92: 'STOP'
+}
