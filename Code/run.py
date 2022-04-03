@@ -30,10 +30,7 @@ sd = SD.SD(mIn, mOut, debug=debug, logParameterChanges=logParameterChanges)
 
 #Start GUI
 root = GUI.tk.Tk()
-gui = GUI.SD1main(root, sd,
-                  titlefont = ('Microgramma D Extended', 16),
-                  textfont  = ('Lucida Sans', 11),
-                  numberfont= ('Lucida Sans', 8))
+gui = GUI.SD1main(root, sd, GUI.black)
 
 #Startup sysex handling (handle all of the queue)
 connectionEstablished, sysexBuffer = sd.establishCommunications()
@@ -52,6 +49,10 @@ def updateTask(sysexBuffer):
           
   #sd queue
   sd.handleQueue()
+  
+  if sd.updateGUI:
+    sd.updateGUI = False
+    gui.loadParameters(sd.params)
 
   gui.frame.after(50, updateTask, sysexBuffer)
 

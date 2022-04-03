@@ -43,9 +43,9 @@ class SD():
       },
       'wave': {
         'pageOffset': 1,
-        'type': 'waveform',
         'sampledWave': {
           'pageOffset': 0,
+          'waveform': 'wave.sampledWave',
           'waveName': [0, 0, 0],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
@@ -55,26 +55,31 @@ class SD():
         },
         'transwave': {
           'pageOffset': 1,
+          'waveform': 'wave.transwave',
           'waveName': [0, 0, 0],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
+          'waveStart': [0, 3, 0],
           'waveModSource': [0, 4, 0],
           'waveModAmount': [0, 5, 0],
         },
         'waveform': {
           'pageOffset': 2,
+          'waveform': 'wave.waveform',
           'waveName': [0, 0, 0],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
         },
         'inharmonic': {
           'pageOffset': 2,
+          'waveform': 'wave.inharmonic',
           'waveName': [0, 0, 0],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
         },
         'multiWave': {
           'pageOffset': 3,
+          'waveform': 'wave.multiwave',
           'waveName': [0, 0, 0],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
@@ -148,7 +153,7 @@ class SD():
       },
       'envelopes': {
         'pageOffset': 14,
-        'env1': {
+        'env0': {
           'pageOffset': 0,
           'initialLevel': [0, 1, 0],
           'peakLevel': [0, 2, 127],
@@ -166,7 +171,7 @@ class SD():
           'levelVelocitySens': [2, 4, 0],
           'attackTimeVelocitySens': [2, 5, 0]
         },
-        'env2': {
+        'env1': {
           'pageOffset': 3,
           'initialLevel': [0, 1, 0],
           'peakLevel': [0, 2, 127],
@@ -184,7 +189,7 @@ class SD():
           'levelVelocitySens': [2, 4, 0],
           'attackTimeVelocitySens': [2, 5, 0]
         },
-        'env3': {
+        'env2': {
           'pageOffset': 6,
           'initialLevel': [0, 1, 0],
           'peakLevel': [0, 2, 127],
@@ -351,12 +356,25 @@ class SD():
       sysex[i:i+1] = value
     return sysex, i
 
+  def getWaveClass(self, wave):
+    if wave < 15: return 0
+    elif wave < 23: return 1
+    elif wave < 29: return 2
+    elif wave < 34: return 3
+    elif wave < 47: return 4
+    elif wave < 63: return 5
+    elif wave < 80: return 6
+    elif wave < 103: return 7
+    elif wave < 108: return 8
 
   def encode8Bit(self, value):
     return [(value & 0xf0) >> 4, value & 0x0f]
   
   def encode16Bit(self, value):
     return [*self.encode8Bit((value & 0xff00) >> 8), *self.encode8Bit(value & 0x00ff)]
+  
+  def decode8Bit(self, byte1, byte2):
+    return (byte1 << 4) + byte1
 
   def decodeSysex(self, sysex):
     #Check if the sysex message is for us.
@@ -374,11 +392,21 @@ class SD():
           print(f'{self.recv}Acknowledge')
         else:
           print(f'{self.alrt}{("No Acknowledgement", "Invalid Parameter Number", "Invalid Parameter Value", "Invalid Button Number")[sysex[7]]}')
+      elif messageType == 0x02:
+        if self.debug: print(f'{self.recv}Received program dump')
+        self.loadProgramDump(sysex[6:-1])
       else:
         print(f'{self.alrt}Unknown message')
       
       if self.debug and self.linebreakRecv: print()
 
+  def requestCurrentProgram(self):
+    sysex = self.getSysexTemplate('currentProgramDumpRequest')
+    
+    if self.debug: 
+      print(f'{self.trans}Requesting current program')
+      
+    midi.sendSysex(self.output, sysex)
 
   def pressButton(self, buttonId):
     sysexDown = self.getSysexTemplate('pressButton')
@@ -412,9 +440,18 @@ class SD():
       param = param[key]
       if type(param) is dict: pageOffset += param['pageOffset']
     
+    if 'wave' in param:
+      t = param.split('.')[1]
+      #self.changeParameter(f'voice{voice}.wave.{t}.waveClass', self.getWaveClass(value))
+      self.changeParameter(f'voice{voice}.wave.{t}.waveName', value)
+      return
+    
+    if value == param[2]: return
+    else: param[2] = value
+    
     if self.debug: 
       print(f'{self.trans}Parameter change {parameter} to {value}')
-    
+      
     sysex, _ = self.replace(sysex, 'voice', self.encode8Bit(voice))
     sysex, _ = self.replace(sysex, 'page', self.encode8Bit(pageOffset + param[0]))
     sysex, _ = self.replace(sysex, 'slot', self.encode8Bit(param[1]))
@@ -426,3 +463,62 @@ class SD():
     if self.debug and self.linebreakRecv: print()
     
     midi.sendSysex(self.output, sysex)
+
+
+  def loadProgramDump(self, sysex):    
+    values = []
+    for i in range(0, len(sysex), 2):
+      values.append(self.decode8Bit(sysex[i], sysex[i+1]))
+      
+    def neg(v):
+      return v if v < 128 else v - 256
+      
+    self.params['voice0']['envelopes']['env0']['initialLevel'][2] = values[0]
+    self.params['voice0']['envelopes']['env0']['attackTime'][2] = values[1]
+    self.params['voice0']['envelopes']['env0']['peakLevel'][2] = values[2]
+    self.params['voice0']['envelopes']['env0']['decay1Time'][2] = values[3]
+    self.params['voice0']['envelopes']['env0']['breakpoint1Level'][2] = values[4]
+    self.params['voice0']['envelopes']['env0']['decay2Time'][2] = values[5]
+    self.params['voice0']['envelopes']['env0']['breakpoint2Level'][2] = values[6]
+    self.params['voice0']['envelopes']['env0']['decay3Time'][2] = values[7]
+    self.params['voice0']['envelopes']['env0']['sustainLevel'][2] = values[8]
+    self.params['voice0']['envelopes']['env0']['releaseTime'][2] = min(values[9] if values[9] < 153 else values[9] - 153, 99)
+    self.params['voice0']['envelopes']['env0']['levelVelocitySens'][2] = values[10]
+    self.params['voice0']['envelopes']['env0']['attackTimeVelocitySens'][2] = values[11]
+    self.params['voice0']['envelopes']['env0']['keyboardTrack'][2] = neg(values[12])
+    self.params['voice0']['envelopes']['env0']['mode'][2] = (values[13] & 0xf0) >> 4
+    self.params['voice0']['envelopes']['env0']['velocityCurve'][2] = values[13] & 0x0f
+    
+    self.params['voice0']['envelopes']['env1']['initialLevel'][2] = values[14]
+    self.params['voice0']['envelopes']['env1']['attackTime'][2] = values[15]
+    self.params['voice0']['envelopes']['env1']['peakLevel'][2] = values[16]
+    self.params['voice0']['envelopes']['env1']['decay1Time'][2] = values[17]
+    self.params['voice0']['envelopes']['env1']['breakpoint1Level'][2] = values[18]
+    self.params['voice0']['envelopes']['env1']['decay2Time'][2] = values[19]
+    self.params['voice0']['envelopes']['env1']['breakpoint2Level'][2] = values[20]
+    self.params['voice0']['envelopes']['env1']['decay3Time'][2] = values[21]
+    self.params['voice0']['envelopes']['env1']['sustainLevel'][2] = values[22]
+    self.params['voice0']['envelopes']['env1']['releaseTime'][2] = min(values[23] if values[23] < 153 else values[23] - 153, 99)
+    self.params['voice0']['envelopes']['env1']['levelVelocitySens'][2] = values[24]
+    self.params['voice0']['envelopes']['env1']['attackTimeVelocitySens'][2] = values[25]
+    self.params['voice0']['envelopes']['env1']['keyboardTrack'][2] = neg(values[26])
+    self.params['voice0']['envelopes']['env1']['mode'][2] = (values[27] & 0xf0) >> 4
+    self.params['voice0']['envelopes']['env1']['velocityCurve'][2] = values[27] & 0x0f
+    
+    self.params['voice0']['envelopes']['env2']['initialLevel'][2] = values[28]
+    self.params['voice0']['envelopes']['env2']['attackTime'][2] = values[29]
+    self.params['voice0']['envelopes']['env2']['peakLevel'][2] = values[30]
+    self.params['voice0']['envelopes']['env2']['decay1Time'][2] = values[31]
+    self.params['voice0']['envelopes']['env2']['breakpoint1Level'][2] = values[32]
+    self.params['voice0']['envelopes']['env2']['decay2Time'][2] = values[33]
+    self.params['voice0']['envelopes']['env2']['breakpoint2Level'][2] = values[34]
+    self.params['voice0']['envelopes']['env2']['decay3Time'][2] = values[35]
+    self.params['voice0']['envelopes']['env2']['sustainLevel'][2] = values[36]
+    self.params['voice0']['envelopes']['env2']['releaseTime'][2] = min(values[37] if values[37] < 153 else values[37] - 153, 99)
+    self.params['voice0']['envelopes']['env2']['levelVelocitySens'][2] = values[38]
+    self.params['voice0']['envelopes']['env2']['attackTimeVelocitySens'][2] = values[39]
+    self.params['voice0']['envelopes']['env2']['keyboardTrack'][2] = neg(values[40])
+    self.params['voice0']['envelopes']['env2']['mode'][2] = (values[41] & 0xf0) >> 4
+    self.params['voice0']['envelopes']['env2']['velocityCurve'][2] = values[41] & 0x0f
+    
+    self.updateGUI = True
