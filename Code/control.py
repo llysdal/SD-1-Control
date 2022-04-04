@@ -1024,6 +1024,7 @@ class SD1main(Application):
       f.envs = []
       f.envVars = []
       f.envModes = []
+      f.envExtras = []
       f.envContexts = []
       envColSpan = 5
       c = 3
@@ -1052,22 +1053,29 @@ class SD1main(Application):
         envParams.frame.grid(column = c, row = r+2, columnspan = envColSpan)
         envParams.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
         envParams.createCGap(0, 3)
-        envParams.createSlider((1, 0), (0, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.attackTimeVelocitySens', int(x)))
+        envExtras = []
+        envExtras.append(
+          envParams.createSlider((1, 0), (0, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.attackTimeVelocitySens', int(x))))
         envParams.createSmallText((1, 1), 'Atk. Vel. Sens.')
         envParams.resizableC(1)
         envParams.createCGap(2, 3)
-        envParams.createSlider((3, 0), (0, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.levelVelocitySens', int(x)))
+        envExtras.append(
+          envParams.createSlider((3, 0), (0, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.levelVelocitySens', int(x))))
         envParams.createSmallText((3, 1), 'Lvl. Vel. Sens.')
         envParams.resizableC(3)
         envParams.createCGap(4, 3)
-        envParams.createSlider((5, 0), (0, 9), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.velocityCurve', int(x)))
+        envExtras.append(
+          envParams.createSlider((5, 0), (0, 9), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.velocityCurve', int(x))))
         envParams.createSmallText((5, 1), 'Vel. Curve')
         envParams.resizableC(5)
         envParams.createCGap(6, 3)
-        envParams.createSlider((7, 0), (-127, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.keyboardTrack', int(x)))
+        envExtras.append(
+          envParams.createSlider((7, 0), (-127, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.keyboardTrack', int(x))))
         envParams.createSmallText((7, 1), 'Kbd. Track')
         envParams.resizableC(7)
         envParams.createCGap(8, 3)
+        
+        f.envExtras.append(envExtras)
         
         for i in range(6): 
           line = env.create_line(0, 0, 0, 0, tags=(f'line{i}'))
@@ -1085,31 +1093,30 @@ class SD1main(Application):
       f.createCGap(c, 15)
     
   def loadParameters(self, params):
-    v = self.voices[0]
+    for v, voice in enumerate(self.voices):
     
-    for e in range(3):
-      v.envVars[e] = [
-        [
-          params['voice0']['envelopes'][f'env{e}']['initialLevel'][2],
-          params['voice0']['envelopes'][f'env{e}']['peakLevel'][2],
-          params['voice0']['envelopes'][f'env{e}']['breakpoint1Level'][2],
-          params['voice0']['envelopes'][f'env{e}']['breakpoint2Level'][2],
-          params['voice0']['envelopes'][f'env{e}']['sustainLevel'][2]
-        ],
-        [
-          params['voice0']['envelopes'][f'env{e}']['attackTime'][2],
-          params['voice0']['envelopes'][f'env{e}']['decay1Time'][2],
-          params['voice0']['envelopes'][f'env{e}']['decay2Time'][2],
-          params['voice0']['envelopes'][f'env{e}']['decay3Time'][2],
-          params['voice0']['envelopes'][f'env{e}']['releaseTime'][2]
+      for e in range(3):
+        voice.envVars[e] = [
+          [
+            params[f'voice{v}']['envelopes'][f'env{e}']['initialLevel'][2],
+            params[f'voice{v}']['envelopes'][f'env{e}']['peakLevel'][2],
+            params[f'voice{v}']['envelopes'][f'env{e}']['breakpoint1Level'][2],
+            params[f'voice{v}']['envelopes'][f'env{e}']['breakpoint2Level'][2],
+            params[f'voice{v}']['envelopes'][f'env{e}']['sustainLevel'][2]
+          ],
+          [
+            params[f'voice{v}']['envelopes'][f'env{e}']['attackTime'][2],
+            params[f'voice{v}']['envelopes'][f'env{e}']['decay1Time'][2],
+            params[f'voice{v}']['envelopes'][f'env{e}']['decay2Time'][2],
+            params[f'voice{v}']['envelopes'][f'env{e}']['decay3Time'][2],
+            params[f'voice{v}']['envelopes'][f'env{e}']['releaseTime'][2]
+          ]
         ]
-      ]
-    
-    # self.params['voice0']['envelopes']['env0']['levelVelocitySans'][2] = values[10]
-    # self.params['voice0']['envelopes']['env0']['attackTimeVelocitySens'][2] = values[11]
-    # self.params['voice0']['envelopes']['env0']['keyboardTrack'][2] = neg(values[12])
-    # self.params['voice0']['envelopes']['env0']['mode'][2] = (values[13] & 0xf0) >> 4
-    # self.params['voice0']['envelopes']['env0']['velocityCurve'][2]
+        voice.envModes[e].set(params[f'voice{v}']['envelopes'][f'env{e}']['mode'][2])
+        voice.envExtras[e][0].set(params[f'voice{v}']['envelopes'][f'env{e}']['attackTimeVelocitySens'][2])
+        voice.envExtras[e][1].set(params[f'voice{v}']['envelopes'][f'env{e}']['levelVelocitySens'][2])
+        voice.envExtras[e][2].set(params[f'voice{v}']['envelopes'][f'env{e}']['velocityCurve'][2])
+        voice.envExtras[e][3].set(params[f'voice{v}']['envelopes'][f'env{e}']['keyboardTrack'][2])
     
     
 
