@@ -27,10 +27,10 @@ mIn, mOut = t.chooseDevices(devices, config)
 #Setup SD-1 communication
 sd = SD.SD(mIn, mOut, debug=debug, logParameterChanges=logParameterChanges)
 
-
 #Start GUI
 root = GUI.tk.Tk()
 gui = GUI.SD1main(root, sd, GUI.black)
+gui.loadParameters(sd.getParameters())
 
 #Startup sysex handling (handle all of the queue)
 connectionEstablished, sysexBuffer = sd.establishCommunications()
@@ -52,7 +52,7 @@ def updateTask(sysexBuffer):
   
   if sd.updateGUI:
     sd.updateGUI = False
-    gui.loadParameters(sd.params)
+    gui.loadParameters(sd.getParameters())
 
   gui.frame.after(50, updateTask, sysexBuffer)
 

@@ -1,6 +1,7 @@
 midi = __import__('midi')
 t = __import__('tools')
 from sdenums import Button, buttonNames
+from collections import Mapping, Collection
 import copy
 
 EST         = 0xF0
@@ -16,12 +17,17 @@ class SD():
     self.output = midi.getMidiOutputDevice(outputID)
     
     self.channel = 0
+    self.decoupled = False
 
     self.updateGUI = False
     self.debug = debug
     self.logParameterChanges = logParameterChanges
-    self.trans =        '┌─T  '
-    self.transNoExp =   '  T  '
+    self.transNormal =        '┌─T  '
+    self.transNoExpNormal =   '  T  '
+    self.transDecoupled =        '┌─I  '
+    self.transNoExpDecoupled =   '  I  '
+    self.trans = self.transNormal
+    self.transNoExp = self.transNoExpNormal
     self.alrt =         '└──//── '
     self.info =         '├────── '
     self.recv =         '└──R '
@@ -36,13 +42,14 @@ class SD():
     voiceParams = {
       'modMixer': {
         'pageOffset': 0,
-        'modSource1': [0, 1, 0],
-        'modSource2': [0, 2, 0],
+        'modSource1': [0, 1, 15],
+        'modSource2': [0, 2, 15],
         'scaler': [0, 4, 0],
         'shape': [0, 5, 0]
       },
       'wave': {
         'pageOffset': 1,
+        'type': 0,
         'sampledWave': {
           'pageOffset': 0,
           'waveform': 'wave.sampledWave',
@@ -56,24 +63,17 @@ class SD():
         'transwave': {
           'pageOffset': 1,
           'waveform': 'wave.transwave',
-          'waveName': [0, 0, 0],
+          'waveName': [0, 0, 63],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
           'waveStart': [0, 3, 0],
-          'waveModSource': [0, 4, 0],
+          'waveModSource': [0, 4, 15],
           'waveModAmount': [0, 5, 0],
         },
         'waveform': {
           'pageOffset': 2,
           'waveform': 'wave.waveform',
-          'waveName': [0, 0, 0],
-          'waveClass':[0, 1, 0],
-          'delayTime':[0, 2, 0],
-        },
-        'inharmonic': {
-          'pageOffset': 2,
-          'waveform': 'wave.inharmonic',
-          'waveName': [0, 0, 0],
+          'waveName': [0, 0, 84],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
         },
@@ -83,8 +83,8 @@ class SD():
           'waveName': [0, 0, 0],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
-          'loopWaveStart': [0, 3, 249],
-          'loopLength': [0, 4, 1],
+          'loopWaveStart': [0, 3, 0],
+          'loopLength': [0, 4, 243],
           'loopDirection': [0, 5, 0]
         }
       },
@@ -97,7 +97,7 @@ class SD():
       },
       'pitchMod': {
         'pageOffset': 6,
-        'modSource': [0, 1, 0],
+        'modSource': [0, 1, 15],
         'modAmount': [0, 2, 0],
         'glideMode':      [0, 3, 0],
         'env1ModAmount': [0, 4, 0],
@@ -110,7 +110,7 @@ class SD():
           'type': [0, 0, 0],
           'cutoff': [0, 1, 0],
           'keyboardTrack': [0, 2, 0],
-          'modSource': [0, 3, 0],
+          'modSource': [0, 3, 15],
           'modAmount': [0, 4, 0],
           'env2ModAmount': [0, 5, 0]
         },
@@ -119,7 +119,7 @@ class SD():
           'type': [0, 0, 0],
           'cutoff': [0, 1, 0],
           'keyboardTrack': [0, 2, 0],
-          'modSource': [0, 3, 0],
+          'modSource': [0, 3, 15],
           'modAmount': [0, 4, 0],
           'env2ModAmount': [0, 5, 0]
         }
@@ -127,13 +127,14 @@ class SD():
       'output': {
         'pageOffset': 9,
         'volume': [0, 0, 0],
-        'volumeModSource': [0, 1, 0],
+        'volumeModSource': [0, 1, 15],
         'volumeModAmount': [0, 2, 0],
         'keyboardScaleAmount': [0, 3, 0],
-        'scalingKeyRange': [0, 5, 108],
+        'scalingKeyStart': [0, 5, 36],
+        'scalingKeyEnd': [0, 5, 96],
         'destination': [1, 2, 1],
         'pan':  [1, 3, 64],
-        'panModSource': [1, 4, 0],
+        'panModSource': [1, 4, 15],
         'panModAmount': [1, 5, 0],
         'preGain': [2, 0, 0],
         'priority': [2, 2, 1],
@@ -142,10 +143,10 @@ class SD():
       'lfo': {
         'pageOffset': 12,
         'rate': [0, 0, 20],
-        'rateModSource': [0, 1, 0],
+        'rateModSource': [0, 1, 15],
         'rateModAmount': [0, 2, 0],
         'depth': [0, 3, 30],
-        'depthModSource': [0, 4, 0],
+        'depthModSource': [0, 4, 15],
         'delay': [0, 5, 0],
         'waveshape': [1, 1, 1],
         'restart': [1, 2, 0],
@@ -309,12 +310,26 @@ class SD():
     model = ['VFX', 'VFX-SD', 'VFX-SD II', 'SD-1'][identitySysex[8]]
     version = f'{identitySysex[12]}.{identitySysex[13]}'
     
-    print(f'{self.info} {model}')
-    print(f'{self.info} OS Version {version}')
-    print(f'{self.info} Channel {self.channel+1}')
+    print(f'{self.info}{model}')
+    print(f'{self.info}OS Version {version}')
+    print(f'{self.info}Channel {self.channel+1}')
     print(f'{self.recv}Communication established!\n')    
      
     return received, sysexBuffer
+  
+  def decouple(self):
+    self.decoupled = True
+    self.trans = self.transDecoupled
+    self.transNoExp = self.transNoExpDecoupled
+    
+  def couple(self):
+    self.decoupled = False
+    self.trans = self.transNormal
+    self.transNoExp = self.transNoExpNormal
+  
+  def send(self, sysex):
+    if not self.decoupled:
+      midi.sendSysex(self.output, sysex)
 
   def getSysexTemplate(self, name):
     if name == 'pressButton':                       return [EST, ensoniqID, vfxFamilyID, sdID, self.channel, 0x00, 0x00, 0x00, 'button', EOX]
@@ -332,8 +347,8 @@ class SD():
     elif name == 'currentSequenceDumpRequest':      return [EST, ensoniqID, vfxFamilyID, sdID, self.channel, 0x00, 0x00, 0x0D, EOX]
     elif name == 'allSequenceDumpRequest':          return [EST, ensoniqID, vfxFamilyID, sdID, self.channel, 0x00, 0x00, 0x0E, EOX]
 
-  def queueSysex(self, sysex):
-    self.operationQueue.append(lambda sd, sysex=sysex: midi.sendSysex(sd.output, sysex))
+  # def queueSysex(self, sysex):
+  #   self.operationQueue.append(lambda sd, sysex=sysex: midi.sendSysex(sd.output, sysex))
 
   def queueOperation(self, func):
     self.operationQueue.append(func)
@@ -356,16 +371,16 @@ class SD():
       sysex[i:i+1] = value
     return sysex, i
 
-  def getWaveClass(self, wave):
-    if wave < 15: return 0
-    elif wave < 23: return 1
-    elif wave < 29: return 2
-    elif wave < 34: return 3
-    elif wave < 47: return 4
-    elif wave < 63: return 5
-    elif wave < 80: return 6
-    elif wave < 103: return 7
-    elif wave < 108: return 8
+  # def getWaveClass(self, wave):
+  #   if wave < 15: return 0
+  #   elif wave < 23: return 1
+  #   elif wave < 29: return 2
+  #   elif wave < 34: return 3
+  #   elif wave < 47: return 4
+  #   elif wave < 63: return 5
+  #   elif wave < 80: return 6
+  #   elif wave < 103: return 7
+  #   elif wave < 108: return 8
 
   def encode8Bit(self, value):
     return [(value & 0xf0) >> 4, value & 0x0f]
@@ -374,7 +389,7 @@ class SD():
     return [*self.encode8Bit((value & 0xff00) >> 8), *self.encode8Bit(value & 0x00ff)]
   
   def decode8Bit(self, byte1, byte2):
-    return (byte1 << 4) + byte1
+    return (byte1 << 4) + byte2
 
   def decodeSysex(self, sysex):
     #Check if the sysex message is for us.
@@ -406,7 +421,7 @@ class SD():
     if self.debug: 
       print(f'{self.trans}Requesting current program')
       
-    midi.sendSysex(self.output, sysex)
+    self.send(sysex)
 
   def pressButton(self, buttonId):
     sysexDown = self.getSysexTemplate('pressButton')
@@ -418,17 +433,17 @@ class SD():
     if self.debug: 
       print(f'{self.trans}Virtual button {buttonNames[buttonId]}')
       print(f'{self.info}Down')
-    midi.sendSysex(self.output, sysexDown)
+    self.send(sysexDown)
     
     t.delay(0.3) #Manual recommends 2-300ms delay
     
     if self.debug:
       print(f'{self.endNoRecv}Up')
-    midi.sendSysex(self.output, sysexUp)
+    self.send(sysexUp)
 
     if self.debug and self.linebreakRecv: print()
     
-  def changeParameter(self, parameter, value):
+  def changeParameter(self, parameter, value, force=False):
     sysex = self.getSysexTemplate('parameterChange')
     
     paramKeys = parameter.split('.')
@@ -436,89 +451,181 @@ class SD():
     voice = 0
     pageOffset = 0
     for key in paramKeys:
-      if 'voice' in key: voice = int(key[5:])
+      if len(key) > 5 and key[0:5] == 'voice': voice = int(key[5])
       param = param[key]
       if type(param) is dict: pageOffset += param['pageOffset']
     
-    if 'wave' in param:
+    if type(param) == str and 'wave' in param:
       t = param.split('.')[1]
       #self.changeParameter(f'voice{voice}.wave.{t}.waveClass', self.getWaveClass(value))
       self.changeParameter(f'voice{voice}.wave.{t}.waveName', value)
       return
     
-    if value == param[2]: return
+    if value == param[2] and not force: return
     else: param[2] = value
     
-    if self.debug: 
-      print(f'{self.trans}Parameter change {parameter} to {value}')
-      
     sysex, _ = self.replace(sysex, 'voice', self.encode8Bit(voice))
     sysex, _ = self.replace(sysex, 'page', self.encode8Bit(pageOffset + param[0]))
     sysex, _ = self.replace(sysex, 'slot', self.encode8Bit(param[1]))
     sysex, _ = self.replace(sysex, 'value', self.encode16Bit(value))
     
     if self.debug: 
+      print(f'{self.trans}Parameter change {parameter} to {value}')
       print(f'{self.endNoRecv}Voice {voice}, Page {pageOffset+param[0]}, Slot {param[1]}')
-      
-    if self.debug and self.linebreakRecv: print()
+      if self.linebreakRecv: print()
     
-    midi.sendSysex(self.output, sysex)
+    self.send(sysex)
+    
+  def changeWaveType(self, voice, t, force=False):
+    if self.params[f'voice{voice}']['wave']['type'] == t and not force: return
+    else: self.params[f'voice{voice}']['wave']['type'] = t
+    
+    if t == 0:
+      self.changeParameter(f'voice{voice}.wave.waveform.waveName', self.params[f'voice{voice}']['wave']['waveform']['waveName'][2], force=True)
+    elif t == 1:
+      self.changeParameter(f'voice{voice}.wave.transwave.waveName', self.params[f'voice{voice}']['wave']['transwave']['waveName'][2], force=True)
+      self.changeParameter(f'voice{voice}.wave.transwave.waveStart', self.params[f'voice{voice}']['wave']['transwave']['waveStart'][2], force=True)
+      self.changeParameter(f'voice{voice}.wave.transwave.waveModSource', self.params[f'voice{voice}']['wave']['transwave']['waveModSource'][2], force=True)
+      self.changeParameter(f'voice{voice}.wave.transwave.waveModAmount', self.params[f'voice{voice}']['wave']['transwave']['waveModAmount'][2], force=True)
+    elif t == 2:
+      self.changeParameter(f'voice{voice}.wave.sampledWave.waveName', self.params[f'voice{voice}']['wave']['sampledWave']['waveName'][2], force=True)
+      self.changeParameter(f'voice{voice}.wave.sampledWave.waveStartIndex', self.params[f'voice{voice}']['wave']['sampledWave']['waveStartIndex'][2], force=True)
+      self.changeParameter(f'voice{voice}.wave.sampledWave.waveVelocityStartMod', self.params[f'voice{voice}']['wave']['sampledWave']['waveVelocityStartMod'][2], force=True)
+      self.changeParameter(f'voice{voice}.wave.sampledWave.waveDirection', self.params[f'voice{voice}']['wave']['sampledWave']['waveDirection'][2], force=True)
+    elif t == 3:
+      self.changeParameter(f'voice{voice}.wave.multiWave.waveClass', 9, force=True)
+      self.changeParameter(f'voice{voice}.wave.multiWave.loopWaveStart', self.params[f'voice{voice}']['wave']['multiWave']['loopWaveStart'][2], force=True)
+      self.changeParameter(f'voice{voice}.wave.multiWave.loopLength', self.params[f'voice{voice}']['wave']['multiWave']['loopLength'][2], force=True)
+      self.changeParameter(f'voice{voice}.wave.multiWave.loopDirection', self.params[f'voice{voice}']['wave']['multiWave']['loopDirection'][2], force=True)
 
+  def getParameters(self):
+    def recursive_map(data):
+      apply = lambda x: recursive_map(x)
+      if isinstance(data, Mapping):
+        return ({k: apply(v) for k, v in data.items()})
+      elif isinstance(data, Collection):
+        return data[2]
+      else:
+        return data
+    
+    return recursive_map(self.params)
 
-  def loadProgramDump(self, sysex):    
+  def loadProgramDump(self, sysex):
     values = []
     for i in range(0, len(sysex), 2):
       values.append(self.decode8Bit(sysex[i], sysex[i+1]))
-      
+    
     def neg(v):
       return v if v < 128 else v - 256
+    
+    self.params['programControl']['glideTime'][2] = values[514]
+    self.params['programControl']['delayMultiplier'][2] = (values[515] & 0xf0) >> 4
+    self.params['programControl']['bendRange'][2] = values[515] & 0x0f
+    self.params['programControl']['restrikeDelay'][2] = values[516]
+    
+    for v in range(6):
+      self.params['selectVoice'][f'voice{v}Status'][2] = (values[509] & (0b1 << v)) >> v
       
-    self.params['voice0']['envelopes']['env0']['initialLevel'][2] = values[0]
-    self.params['voice0']['envelopes']['env0']['attackTime'][2] = values[1]
-    self.params['voice0']['envelopes']['env0']['peakLevel'][2] = values[2]
-    self.params['voice0']['envelopes']['env0']['decay1Time'][2] = values[3]
-    self.params['voice0']['envelopes']['env0']['breakpoint1Level'][2] = values[4]
-    self.params['voice0']['envelopes']['env0']['decay2Time'][2] = values[5]
-    self.params['voice0']['envelopes']['env0']['breakpoint2Level'][2] = values[6]
-    self.params['voice0']['envelopes']['env0']['decay3Time'][2] = values[7]
-    self.params['voice0']['envelopes']['env0']['sustainLevel'][2] = values[8]
-    self.params['voice0']['envelopes']['env0']['releaseTime'][2] = min(values[9] if values[9] < 153 else values[9] - 153, 99)
-    self.params['voice0']['envelopes']['env0']['levelVelocitySens'][2] = values[10]
-    self.params['voice0']['envelopes']['env0']['attackTimeVelocitySens'][2] = values[11]
-    self.params['voice0']['envelopes']['env0']['keyboardTrack'][2] = neg(values[12])
-    self.params['voice0']['envelopes']['env0']['mode'][2] = (values[13] & 0xf0) >> 4
-    self.params['voice0']['envelopes']['env0']['velocityCurve'][2] = values[13] & 0x0f
+      vO = v * 83
+      for e in range(3):
+        eO = e * 14
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['initialLevel'][2] = values[vO+eO+ 0]-128 if e == 0 else values[vO+eO+ 0]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['attackTime'][2] = values[vO+eO+ 1]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['peakLevel'][2] = values[vO+eO+ 2]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['decay1Time'][2] = values[vO+eO+ 3]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['breakpoint1Level'][2] = values[vO+eO+ 4]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['decay2Time'][2] = values[vO+eO+ 5]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['breakpoint2Level'][2] = values[vO+eO+ 6]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['decay3Time'][2] = values[vO+eO+ 7]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['sustainLevel'][2] = values[vO+eO+ 8]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['releaseTime'][2] = values[vO+eO+ 9]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['levelVelocitySens'][2] = values[vO+eO+ 10]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['attackTimeVelocitySens'][2] = values[vO+eO+ 11]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['keyboardTrack'][2] = neg(values[vO+eO+ 12])
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['mode'][2] = (values[vO+eO+ 13] & 0xf0) >> 4
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['velocityCurve'][2] = values[vO+eO+ 13] & 0x0f
     
-    self.params['voice0']['envelopes']['env1']['initialLevel'][2] = values[14]
-    self.params['voice0']['envelopes']['env1']['attackTime'][2] = values[15]
-    self.params['voice0']['envelopes']['env1']['peakLevel'][2] = values[16]
-    self.params['voice0']['envelopes']['env1']['decay1Time'][2] = values[17]
-    self.params['voice0']['envelopes']['env1']['breakpoint1Level'][2] = values[18]
-    self.params['voice0']['envelopes']['env1']['decay2Time'][2] = values[19]
-    self.params['voice0']['envelopes']['env1']['breakpoint2Level'][2] = values[20]
-    self.params['voice0']['envelopes']['env1']['decay3Time'][2] = values[21]
-    self.params['voice0']['envelopes']['env1']['sustainLevel'][2] = values[22]
-    self.params['voice0']['envelopes']['env1']['releaseTime'][2] = min(values[23] if values[23] < 153 else values[23] - 153, 99)
-    self.params['voice0']['envelopes']['env1']['levelVelocitySens'][2] = values[24]
-    self.params['voice0']['envelopes']['env1']['attackTimeVelocitySens'][2] = values[25]
-    self.params['voice0']['envelopes']['env1']['keyboardTrack'][2] = neg(values[26])
-    self.params['voice0']['envelopes']['env1']['mode'][2] = (values[27] & 0xf0) >> 4
-    self.params['voice0']['envelopes']['env1']['velocityCurve'][2] = values[27] & 0x0f
-    
-    self.params['voice0']['envelopes']['env2']['initialLevel'][2] = values[28]
-    self.params['voice0']['envelopes']['env2']['attackTime'][2] = values[29]
-    self.params['voice0']['envelopes']['env2']['peakLevel'][2] = values[30]
-    self.params['voice0']['envelopes']['env2']['decay1Time'][2] = values[31]
-    self.params['voice0']['envelopes']['env2']['breakpoint1Level'][2] = values[32]
-    self.params['voice0']['envelopes']['env2']['decay2Time'][2] = values[33]
-    self.params['voice0']['envelopes']['env2']['breakpoint2Level'][2] = values[34]
-    self.params['voice0']['envelopes']['env2']['decay3Time'][2] = values[35]
-    self.params['voice0']['envelopes']['env2']['sustainLevel'][2] = values[36]
-    self.params['voice0']['envelopes']['env2']['releaseTime'][2] = min(values[37] if values[37] < 153 else values[37] - 153, 99)
-    self.params['voice0']['envelopes']['env2']['levelVelocitySens'][2] = values[38]
-    self.params['voice0']['envelopes']['env2']['attackTimeVelocitySens'][2] = values[39]
-    self.params['voice0']['envelopes']['env2']['keyboardTrack'][2] = neg(values[40])
-    self.params['voice0']['envelopes']['env2']['mode'][2] = (values[41] & 0xf0) >> 4
-    self.params['voice0']['envelopes']['env2']['velocityCurve'][2] = values[41] & 0x0f
+      octave = round(neg(values[vO+ 42]) / 12)
+      self.params[f'voice{v}']['pitch']['octave'][2] = octave
+      semi = neg(values[vO+ 42]) - octave * 12
+      self.params[f'voice{v}']['pitch']['semitone'][2] = semi
+      self.params[f'voice{v}']['pitch']['fineTune'][2] = neg(values[vO+ 43])
+      self.params[f'voice{v}']['pitch']['pitchTable'][2] = values[vO+ 44]
+      self.params[f'voice{v}']['pitchMod']['env1ModAmount'][2] = neg(values[vO+ 45])
+      self.params[f'voice{v}']['pitchMod']['lfoModAmount'][2] = neg(values[vO+ 46])
+      self.params[f'voice{v}']['pitchMod']['glideMode'][2] = (values[vO+ 47] & 0xf0) >> 4
+      self.params[f'voice{v}']['pitchMod']['modSource'][2] = values[vO+ 47] & 0x0f
+      self.params[f'voice{v}']['pitchMod']['modAmount'][2] = neg(values[vO+ 48])
+
+      #filterMode = values[vO+ 52] ???? collisions
+      #self.params[f'voice{v}']['filters'][f'filter1']['type'][2] = filterMode
+      #self.params[f'voice{v}']['filters'][f'filter2']['type'][2] = filterMode
+      for f in range(2):
+        fO = f * 5
+        self.params[f'voice{v}']['filters'][f'filter{f+1}']['cutoff'][2] = values[vO+fO+ 49]
+        self.params[f'voice{v}']['filters'][f'filter{f+1}']['keyboardTrack'][2] = neg(values[vO+fO+ 50])
+        self.params[f'voice{v}']['filters'][f'filter{f+1}']['env2ModAmount'][2] = neg(values[vO+fO+ 51])
+        self.params[f'voice{v}']['filters'][f'filter{f+1}']['modSource'][2] = values[vO+fO+ 52] & 0x0f
+        self.params[f'voice{v}']['filters'][f'filter{f+1}']['modAmount'][2] = neg(values[vO+fO+ 53])
+        
+      self.params[f'voice{v}']['output']['keyboardScaleAmount'][2] = neg(values[vO+ 59])
+      self.params[f'voice{v}']['output']['scalingKeyStart'][2] = values[vO+ 60]
+      self.params[f'voice{v}']['output']['scalingKeyEnd'][2] = values[vO+ 61]
+      self.params[f'voice{v}']['output']['volume'][2] = values[vO+ 62] & 0x7f
+      self.params[f'voice{v}']['output']['preGain'][2] = (values[vO+ 62] & 0x80) >> 7
+      self.params[f'voice{v}']['output']['panModSource'][2] = (values[vO+ 63] & 0xf0) >> 4
+      self.params[f'voice{v}']['output']['volumeModSource'][2] = values[vO+ 63] & 0x0f
+      self.params[f'voice{v}']['output']['volumeModAmount'][2] = neg(values[vO+ 64])
+      self.params[f'voice{v}']['output']['pan'][2] = values[vO+ 65]
+      self.params[f'voice{v}']['output']['panModAmount'][2] = neg(values[vO+ 66])
+      self.params[f'voice{v}']['output']['priority'][2] = (values[vO+ 67] & 0xf0) >> 4
+      self.params[f'voice{v}']['output']['destination'][2] = values[vO+ 67] & 0x0f
+      self.params[f'voice{v}']['output']['velocityThreshold'][2] = neg(values[vO+ 82])
+      
+      self.params[f'voice{v}']['lfo']['waveshape'][2] = (values[vO+ 68] & 0xf0) >> 4
+      self.params[f'voice{v}']['lfo']['depthModSource'][2] = values[vO+ 68] & 0x0f
+      self.params[f'voice{v}']['lfo']['depth'][2] = values[vO+ 69]
+      self.params[f'voice{v}']['lfo']['restart'][2] = (values[vO+ 70] & 0xf0) >> 4
+      self.params[f'voice{v}']['lfo']['rateModSource'][2] = values[vO+ 70] & 0x0f
+      self.params[f'voice{v}']['lfo']['rateModAmount'][2] = neg(values[vO+ 71])
+      self.params[f'voice{v}']['lfo']['rate'][2] = values[vO+ 72]
+      self.params[f'voice{v}']['lfo']['delay'][2] = values[vO+ 73]
+      self.params[f'voice{v}']['lfo']['noiseSourceRate'][2] = values[vO+ 78]
+      
+      self.params[f'voice{v}']['modMixer']['shape'][2] = (values[vO+ 80] & 0xf0) >> 4
+      self.params[f'voice{v}']['modMixer']['modSource1'][2] = values[vO+ 80] & 0x0f
+      self.params[f'voice{v}']['modMixer']['scaler'][2] = (values[vO+ 81] & 0xf0) >> 4
+      self.params[f'voice{v}']['modMixer']['modSource2'][2] = values[vO+ 81] & 0x0f
+      
+      waveClass = (values[vO+ 75] & 0xf0) >> 4
+      if waveClass == 7 or waveClass == 8:
+        #waveform
+        self.params[f'voice{v}']['wave']['type'] = 0
+        self.params[f'voice{v}']['wave']['waveform']['waveName'][2] = values[vO+ 74]
+        self.params[f'voice{v}']['wave']['waveform']['delayTime'][2] = values[vO+ 79]
+      elif waveClass == 6:
+        #transwave
+        self.params[f'voice{v}']['wave']['type'] = 1
+        self.params[f'voice{v}']['wave']['transwave']['waveName'][2] = values[vO+ 74]
+        self.params[f'voice{v}']['wave']['transwave']['waveModSource'][2] = values[vO+ 75] & 0x0f
+        self.params[f'voice{v}']['wave']['transwave']['waveModAmount'][2] = neg(values[vO+ 76])
+        self.params[f'voice{v}']['wave']['transwave']['waveStart'][2] = values[vO+ 77]
+        self.params[f'voice{v}']['wave']['transwave']['delayTime'][2] = values[vO+ 79]
+      elif waveClass == 9:
+        #multiwave
+        self.params[f'voice{v}']['wave']['type'] = 3
+        self.params[f'voice{v}']['wave']['multiWave']['waveName'][2] = values[vO+ 74]
+        self.params[f'voice{v}']['wave']['multiWave']['loopDirection'][2] = values[vO+ 75] & 0x0f
+        self.params[f'voice{v}']['wave']['multiWave']['loopLength'][2] = values[vO+ 76]
+        self.params[f'voice{v}']['wave']['multiWave']['loopWaveStart'][2] = values[vO+ 77]
+        self.params[f'voice{v}']['wave']['multiWave']['delayTime'][2] = values[vO+ 79]
+      else:
+        #sampled
+        self.params[f'voice{v}']['wave']['type'] = 2
+        self.params[f'voice{v}']['wave']['sampledWave']['waveName'][2] = values[vO+ 74]
+        self.params[f'voice{v}']['wave']['sampledWave']['waveDirection'][2] = values[vO+ 75] & 0x0f
+        self.params[f'voice{v}']['wave']['sampledWave']['waveVelocityStartMod'][2] = neg(values[vO+ 76])
+        self.params[f'voice{v}']['wave']['sampledWave']['waveStartIndex'][2] = values[vO+ 77]
+        self.params[f'voice{v}']['wave']['sampledWave']['delayTime'][2] = values[vO+ 79]
     
     self.updateGUI = True
