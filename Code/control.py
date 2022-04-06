@@ -52,7 +52,7 @@ class Application():
     self.titlefont = ('Microgramma D Extended', 14)
     self.textfont = ('Lucida Sans', 11)
     self.smalltextfont = ('Lucida Sans', 8)
-    self.numberfont = ('Lucida Sans', 8)
+    self.numberfont = ('Lucida Sans', 10)
     
     self.background = background
 
@@ -118,11 +118,12 @@ class Application():
 
     return slider
 
-  def createMenuButton(self, gridpos, sticky = E+S, columnspan=1, width=10, value=0, command=None):    
+  def createMenuButton(self, gridpos, sticky = E+S, columnspan=1, width=10, value=0, command=None, disabled=False):    
     labelVar = tk.StringVar(value='default')
     var = tk.IntVar(value=value)
     
     menubutton = ttk.Menubutton(self.frame, textvariable=labelVar, width=width)
+    if disabled: menubutton.state(["disabled"])
     menu = tk.Menu(menubutton, tearoff=0, borderwidth=0, activeborderwidth=0)
     menubutton['menu'] = menu
     menubutton.grid(column = gridpos[0], row = gridpos[1], columnspan = columnspan, sticky = sticky)
@@ -170,13 +171,13 @@ class Application():
     
     return var
   
-  def createToggleButton(self, gridpos, text, default=0, command = None, threeState = False):
+  def createToggleButton(self, gridpos, text, default=0, sticky=N+S+E+W, columnspan=1, command = None, threeState = False):
     var = tk.IntVar(value=default)
     on, off, three = red, grey, blue
     
     button = tk.Button(self.frame, text = text, command = lambda var=var: var.set(0) if var.get() else var.set(1))
     button.configure(foreground = white, activeforeground = white, activebackground = on if var.get() else off, background = on if var.get() else off)
-    button.grid(column = gridpos[0], row = gridpos[1], stick = N+S+E+W)
+    button.grid(column = gridpos[0], row = gridpos[1], stick = sticky, columnspan=columnspan)
     
     if not threeState:
       var.trace_add("write", lambda x, y, z, var=var, b=button, off=off, on=on: b.configure(background=on, activebackground=on) if var.get() else b.configure(background=off, activebackground=off))
@@ -235,6 +236,14 @@ class Application():
     label.configure(foreground = white, background = self.background)
     label.grid(column = gridpos[0], row = gridpos[1], columnspan = columnspan, sticky = sticky)
 
+    return stringvar
+  
+  def createTextEntry(self, gridpos, sticky = E+W+S, width=12, command = None):
+    stringvar = tk.StringVar()
+    
+    entry = tk.Entry(self.frame, textvariable = stringvar, background=grey, foreground=white, insertbackground=white, width=width)
+    entry.grid(column = gridpos[0], row = gridpos[1], sticky = sticky)
+    
     return stringvar
 
   def createCheckbutton(self, gridpos, text, columnspan = 1, sticky = E+S):
@@ -465,6 +474,7 @@ class SD1main(Application):
 
     programmenu = tk.Menu(self.menu, tearoff=0)
     programmenu.add_command(label='Request current', command=lambda sd=sd: sd.requestCurrentProgram())
+    programmenu.add_command(label='Send current', command=lambda sd=sd: sd.saveProgramDump())
     self.menu.add_cascade(label='Programs', menu=programmenu)
     
     self.menu.add_command(label="\u22EE", activebackground=self.menu.cget("background"), state=tk.DISABLED)
@@ -491,7 +501,7 @@ class SD1main(Application):
     #programTabs.select(voice0Tab)
     
     selectorWidth = 25
-    sectionGap = 40
+    sectionGap = 20
     innerGap = 30
     outerGap = 0
     panelInnerGap = 15
@@ -508,19 +518,21 @@ class SD1main(Application):
     c.program.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
     c.program.createTitle((1, 0), 'Program', columnspan=7)
     c.program.createCGap(0, panelInnerGap)
-    self.bendRange = c.program.createSlider((1, 1), (0, 13), start = 0, width=18, length = 150, sticky=S+E+W, command=lambda x, sd=sd:sd.changeParameter(f'programControl.bendRange', int(x)))
-    c.program.createSmallText((1, 2), 'Pitch Bend Range')
+    self.programName = c.program.createTextEntry((1,2))
+    c.program.createSmallText((1, 3), 'Name')
+    self.bendRange = c.program.createSlider((1, 4), (0, 13), start = 0, width=18, length = 150, sticky=S+E+W, command=lambda x, sd=sd:sd.changeParameter(f'programControl.bendRange', int(x)))
+    c.program.createSmallText((1, 5), 'Pitch Bend Range')
     c.program.createCGap(2, 10)
-    self.glideTime = c.program.createSlider((3, 1), (0, 99), start = 0, width=18, length = 200, sticky=S+E+W, command=lambda x, sd=sd:sd.changeParameter(f'programControl.glideTime', int(x)))
-    c.program.createSmallText((3, 2), 'Glide Time')
+    self.glideTime = c.program.createSlider((3, 4), (0, 99), start = 0, width=18, length = 200, sticky=S+E+W, command=lambda x, sd=sd:sd.changeParameter(f'programControl.glideTime', int(x)))
+    c.program.createSmallText((3, 5), 'Glide Time')
     c.program.createCGap(4, 10)
-    self.restrikeDelay = c.program.createSlider((5, 1), (0, 99), start = 0, width=18, length = 200, sticky=S+E+W, command=lambda x, sd=sd:sd.changeParameter(f'programControl.restrikeDelay', int(x)))
-    c.program.createSmallText((5, 2), 'Restrike Delay')
+    self.restrikeDelay = c.program.createSlider((5, 4), (0, 99), start = 0, width=18, length = 200, sticky=S+E+W, command=lambda x, sd=sd:sd.changeParameter(f'programControl.restrikeDelay', int(x)))
+    c.program.createSmallText((5, 5), 'Restrike Delay')
     c.program.createCGap(6, 10)
-    delayMultiplier, self.delayMultiplier, delayMultiplierLabel = c.program.createMenuButton((7, 1), sticky=S+E+W, width=18,
+    delayMultiplier, self.delayMultiplier, delayMultiplierLabel = c.program.createMenuButton((7, 4), sticky=S+E+W, width=18,
                                                                     command=lambda x: sd.changeParameter(f'programControl.delayMultiplier', x))
     c.program.createMenuButtonOptions(delayMultiplier, ['x1', 'x2', 'x4', 'x8'], self.delayMultiplier, delayMultiplierLabel)
-    c.program.createSmallText((7, 2), 'Delay Multiplier')
+    c.program.createSmallText((7, 5), 'Delay Multiplier')
     c.program.createCGap(8, panelInnerGap)
     c.program.createRGap(3, panelInnerGap-5)
     
@@ -636,7 +648,7 @@ class SD1main(Application):
       f.waveformWave.trace_add("write", lambda x, y, z, var=f.waveformWave, l=waveformWaveLabel, wm=waveMap:
         l.set(wm[var.get()]))
       f.waveformWave.trace_add("write", lambda x, y, z, var=f.waveformWave, v=v, sd=sd:(
-        sd.changeParameter(f'voice{v}.wave.waveform.waveform', var.get())))
+        sd.changeParameter(f'voice{v}.wave.waveform.waveName', var.get())))
       f.waveformFrame.createRGap(0, 21)
       f.waveformFrame.createCGap(0, 15)
       f.waveformFrame.createCGap(2, 15)
@@ -671,7 +683,7 @@ class SD1main(Application):
       f.transwaveWave.trace_add("write", lambda x, y, z, var=f.transwaveWave, l=transwaveWaveLabel, wm=waveMap:
         l.set(wm[var.get()]))
       f.transwaveWave.trace_add("write", lambda x, y, z, var=f.transwaveWave, v=v, sd=sd:(
-        sd.changeParameter(f'voice{v}.wave.transwave.waveform', var.get())))
+        sd.changeParameter(f'voice{v}.wave.transwave.waveName', var.get())))
       f.transwaveStart = f.transwaveFrame.createSlider((3, 1), (0, 99), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.wave.transwave.waveStart', int(x)))
       f.transwaveFrame.createSmallText((3, 2), 'Start')
       f.transwaveModAmount = f.transwaveFrame.createSlider((3, 3), (-127, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.wave.transwave.waveModAmount', int(x)))
@@ -768,7 +780,7 @@ class SD1main(Application):
         ]],
         [brass,
         [
-          ('uni-brass', 15),
+          ('Uni Brass', 15),
           ('Trumpet', 16),
           ('Trumpet (var.)', 17),
           ('Frenchhorn', 18),
@@ -904,7 +916,7 @@ class SD1main(Application):
       f.sampledWave.trace_add("write", lambda x, y, z, var=f.sampledWave, l=sampledWaveLabel, wm=waveMap:
         l.set(wm[var.get()]))
       f.sampledWave.trace_add("write", lambda x, y, z, var=f.sampledWave, v=v, sd=sd:
-        sd.changeParameter(f'voice{v}.wave.sampledWave.waveform', var.get()))
+        sd.changeParameter(f'voice{v}.wave.sampledWave.waveName', var.get()))
       f.sampledWaveStart = f.sampledFrame.createSlider((3, 1), (0, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.wave.sampledWave.waveStartIndex', int(x)))
       f.sampledFrame.createSmallText((3, 2), 'Start')
       f.sampledWaveStartVelocityMod = f.sampledFrame.createSlider((3, 3), (-127, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.wave.sampledWave.waveVelocityStartMod', int(x)))
@@ -940,7 +952,7 @@ class SD1main(Application):
       # VOICE
       f.voice = Application()
       f.voice.init(f.frame, darkGrey)
-      f.voice.frame.grid(column = 1, row = 4)
+      f.voice.frame.grid(column = 1, row = 4, rowspan = 4)
       f.voice.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
       f.resizableC(1)
       f.voice.resizableC(1)
@@ -951,27 +963,28 @@ class SD1main(Application):
       voicePreGain, f.voicePreGain, voicePreGainLabel = f.voice.createMenuButton((1, 1), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.output.preGain', x), width=selectorWidth)
       f.createMenuButtonOptions(voicePreGain, ['Off', 'On'], f.voicePreGain, voicePreGainLabel)
       f.voice.createSmallText((1, 2), 'Pre-Gain')
-      f.voice.createRGap(2, 36)
+      f.voice.createRGap(2, 30)
       outputDestination, f.outputDestination, outputDestinationLabel = f.voice.createMenuButton((1, 3), value=1, sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.output.destination', x), width=selectorWidth)
       f.createMenuButtonOptions(outputDestination, ['Dry', 'FX 1', 'FX 2', 'AUX'], f.outputDestination, outputDestinationLabel)
       f.voice.createSmallText((1, 4), 'Destination')
-      f.voice.createRGap(4, 36)
+      f.voice.createRGap(4, 30)
       voicePriority, f.voicePriority, voicePriorityLabel = f.voice.createMenuButton((1, 5), value=1, sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.output.priority', x), width=selectorWidth)
       f.createMenuButtonOptions(voicePriority, ['Low', 'Medium', 'High'], f.voicePriority, voicePriorityLabel)
-      f.voice.createRGap(6, 36)
-      glideMode, f.glideMode, glideModeLabel = f.voice.createMenuButton((1, 7), value=1, sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.pitchMod.glideMode', x), width=selectorWidth)
+      f.voice.createSmallText((1, 6), 'Priority')
+      f.voice.createRGap(7, 10)
+      glideMode, f.glideMode, glideModeLabel = f.voice.createMenuButton((1, 8), value=1, sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.pitchMod.glideMode', x), width=selectorWidth)
       f.createMenuButtonOptions(glideMode, ['None', 'Pedal', 'Mono', 'Legato', 'Trigger', 'Minimod'], f.glideMode, glideModeLabel)
-      f.voice.createSmallText((1, 8), 'Glide Mode')
-      f.velocityThreshold = f.voice.createSlider((1, 9), (-127, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.output.velocityThreshold', int(x)))
-      f.voice.createSmallText((1, 10), 'Velocity Threshold')
-      f.delay = f.voice.createSlider((1, 11), (0, 251), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.wave.waveform.delayTime', int(x)))
-      f.voice.createSmallText((1, 12), 'Delay')
+      f.voice.createSmallText((1, 9), 'Glide Mode')
+      f.velocityThreshold = f.voice.createSlider((1, 10), (-127, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.output.velocityThreshold', int(x)))
+      f.voice.createSmallText((1, 11), 'Velocity Threshold')
+      f.delay = f.voice.createSlider((1, 12), (0, 251), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.wave.waveform.delayTime', int(x)))
+      f.voice.createSmallText((1, 13), 'Delay')
       
       # PITCH
       f.createCGap(3, outerGap)
       f.pitch = Application()
       f.pitch.init(f.frame, darkGrey)
-      f.pitch.frame.grid(column = 4, row = 4)
+      f.pitch.frame.grid(column = 4, row = 4, rowspan=2)
       f.pitch.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
       f.resizableC(4)
       f.pitch.resizableC(1)
@@ -994,7 +1007,7 @@ class SD1main(Application):
       # PITCH MOD 
       f.pitchMod = Application()
       f.pitchMod.init(f.frame, darkGrey)
-      f.pitchMod.frame.grid(column = 6, row = 4)
+      f.pitchMod.frame.grid(column = 6, row = 4, rowspan=2)
       f.pitchMod.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
       f.pitchMod.createCGap(0, panelInnerGap)
       f.pitchMod.createCGap(2, panelInnerGap)
@@ -1015,14 +1028,14 @@ class SD1main(Application):
       f.createCGap(9, outerGap)
       f.filter1 = Application()
       f.filter1.init(f.frame, darkGrey)
-      f.filter1.frame.grid(column = 10, row = 4)
+      f.filter1.frame.grid(column = 10, row = 4, rowspan = 4)
       f.filter1.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
       f.filter1.createCGap(0, panelInnerGap)
       f.filter1.createCGap(2, panelInnerGap)
       f.filter1.createTitle((1, 0), 'Filter 1')
       f.filter1.createRGap(1, 40)
-      filter1Type, f.filter1Type, filter1TypeLabel = f.filter1.createMenuButton((1, 1), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.filters.filter1.type', x), width=selectorWidth)
-      f.filter1.createMenuButtonOptions(filter1Type, ['Low Pass 2', 'Low Pass 3'], f.filter1Type, filter1TypeLabel)
+      filter1Type, f.filter1Type, filter1TypeLabel = f.filter1.createMenuButton((1, 1), sticky=S, width=selectorWidth, disabled=True)
+      f.filter1.createMenuButtonOptions(filter1Type, ['Low Pass 2', 'Low Pass 3', 'Low Pass 2', 'Low Pass 3'], f.filter1Type, filter1TypeLabel)
       f.filter1.createSmallText((1, 2), 'Type')
       f.filter1Cutoff = f.filter1.createSlider((1, 3), (0, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.filters.filter1.cutoff', int(x)))
       f.filter1.createSmallText((1, 4), 'Cutoff')
@@ -1040,13 +1053,15 @@ class SD1main(Application):
       # FILTER 2
       f.filter2 = Application()
       f.filter2.init(f.frame, darkGrey)
-      f.filter2.frame.grid(column = 12, row = 4)
+      f.filter2.frame.grid(column = 12, row = 4, rowspan = 4)
       f.filter2.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
       f.filter2.createCGap(0, panelInnerGap)
       f.filter2.createCGap(2, panelInnerGap)
       f.filter2.createTitle((1, 0), 'Filter 2')
       f.filter2.createRGap(1, 40)
       filter2Type, f.filter2Type, filter2TypeLabel = f.filter2.createMenuButton((1, 1), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.filters.filter2.type', x), width=selectorWidth)
+      f.filter2Type.trace_add("write", lambda x, y, z, f2=f.filter2Type, f1=f.filter1Type:
+        f1.set(f2.get()))
       f.filter2.createMenuButtonOptions(filter2Type, ['High Pass 2', 'High Pass 1', 'Low Pass 2', 'Low Pass 1'], f.filter2Type, filter2TypeLabel)
       f.filter2.createSmallText((1, 2), 'Type')
       f.filter2Cutoff = f.filter2.createSlider((1, 3), (0, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.filters.filter2.cutoff', int(x)))
@@ -1091,12 +1106,62 @@ class SD1main(Application):
       f.pan.createCGap(0, panelInnerGap)
       f.pan.createCGap(2, panelInnerGap)
       f.pan.createTitle((1, 0), 'Pan', columnspan=2)
-      f.panS = f.pan.createSlider((1, 1), (0, 127), start = 64, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.output.pan', int(x)))
+      f.panS = f.pan.createSlider((1, 1), (-64, 63), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.output.pan', int(x)+64))
       f.pan.createSmallText((1, 2), 'Pan')
       f.panModAmount = f.pan.createSlider((1, 3), (-127, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.output.panModAmount', int(x)))
       f.panModSource = f.pan.createModSourceSelector((1, 4), sticky=S+E+W, command=lambda x, v=v: sd.changeParameter(f'voice{v}.output.panModSource', x), width=33)
       f.pan.createSmallText((1, 5), 'Mod')
       f.createCGap(19, outerGap)
+      
+      # LFO
+      f.lfo = Application()
+      f.lfo.init(f.frame, darkGrey)
+      f.lfo.frame.grid(column = 16, row = 6, columnspan = 3, rowspan=2)
+      f.lfo.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
+      f.lfo.createCGap(0, panelInnerGap)
+      f.lfo.createCGap(6, panelInnerGap)
+      f.lfo.createTitle((1, 0), 'LFO', columnspan=5)
+      f.lfoRate = f.lfo.createSlider((1, 1), (0, 99), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.rate', int(x)))
+      f.lfo.createSmallText((1, 2), 'Rate')
+      f.lfoRateModAmount = f.lfo.createSlider((1, 3), (-127, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.rateModAmount', int(x)))
+      f.lfoRateModSource = f.lfo.createModSourceSelector((1, 4), sticky=S+E+W, command=lambda x, v=v: sd.changeParameter(f'voice{v}.lfo.rateModSource', x), width=25)
+      f.lfo.createSmallText((1, 5), 'Rate Mod')
+      f.lfo.createCGap(2, 10) #gap
+      f.lfoDepth = f.lfo.createSlider((3, 1), (0, 127), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.depth', int(x)))
+      f.lfo.createSmallText((3, 2), 'Depth')
+      f.lfoDepthModSource = f.lfo.createModSourceSelector((3, 4), sticky=S+E+W, command=lambda x, v=v: sd.changeParameter(f'voice{v}.lfo.depthModSource', x), width=25)
+      f.lfo.createSmallText((3, 5), 'Depth Mod')
+      f.lfo.createCGap(4, 10) #gap
+      f.lfoDelay = f.lfo.createSlider((5, 1), (0, 99), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.delay', int(x)))
+      f.lfo.createSmallText((5, 2), 'Delay')
+      f.lfoRestart = f.lfo.createToggleButton((5, 3), f'Restart', sticky=E+W+N, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.restart', x))
+      lfoWave, f.lfoWave, lfoWaveLabel = f.lfo.createMenuButton((5, 4), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.lfo.waveshape', x), width=25)
+      f.lfo.createMenuButtonOptions(lfoWave, ['Triangle', 'Sine', 'Sine/Tri', 'Pos/Sin', 'Pos/Tri', 'Saw', 'Square'], f.lfoWave, lfoWaveLabel)
+      f.lfo.createSmallText((5, 5), 'Waveshape')
+      
+      # Mod Mixer
+      f.mixer = Application()
+      f.mixer.init(f.frame, darkGrey)
+      f.mixer.frame.grid(column = 4, row = 7, columnspan = 3)
+      f.mixer.frame.configure(background=darkGrey, relief='ridge', borderwidth=2)
+      f.mixer.createCGap(0, panelInnerGap)
+      f.mixer.createCGap(6, panelInnerGap)
+      f.mixer.createTitle((1, 0), 'Mod Mixer', columnspan=5)
+      f.mixer.createRGap(1, 40)
+      f.mixerSource1 = f.mixer.createModSourceSelector((1, 1), sticky=S+E+W, command=lambda x, v=v: sd.changeParameter(f'voice{v}.modMixer.modSource1', x), width=25)
+      f.mixer.createSmallText((1, 2), 'Source 1')
+      f.mixerSource2 = f.mixer.createModSourceSelector((1, 3), sticky=S+E+W, command=lambda x, v=v: sd.changeParameter(f'voice{v}.modMixer.modSource2', x), width=25)
+      f.mixer.createSmallText((1, 4), 'Source 2')
+      f.mixer.createCGap(2, 10) #gap
+      mixerScaler, f.mixerScaler, mixerScalerLabel = f.mixer.createMenuButton((3, 1), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.modMixer.scaler', x), width=25)
+      f.mixer.createMenuButtonOptions(mixerScaler, ['0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0', '1.5', '2.0', '3.0', '4.0', '6.0', '8.0'], f.mixerScaler, mixerScalerLabel)
+      f.mixer.createSmallText((3, 2), 'Scaler')
+      f.mixer.createCGap(4, 10) #gap
+      mixerShape, f.mixerShape, mixerShapeLabel = f.mixer.createMenuButton((5, 1), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.modMixer.shape', x), width=25)
+      f.mixer.createMenuButtonOptions(mixerShape, ['Quick Rise', 'Convex 1', 'Convex 2', 'Convex 3', 'Linear', 'Concave 1', 'Concave 2', 'Concave 3', 'Concave 4', 'Late Rise', 'Quantize 32', 'Quantize 16', 'Quantize 8', 'Quantize 4', 'Quantize 2', 'Smoother'], f.mixerShape, mixerShapeLabel)
+      f.mixer.createSmallText((5, 2), 'Shape')
+      f.noiseSourceRate = f.mixer.createSlider((3, 3), (0, 127), start = 0,  columnspan=3, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.noiseSourceRate', int(x)))
+      f.mixer.createSmallText((3, 4), 'Noise Source Rate',  columnspan=3)
     
      
       # ENVELOPES
@@ -1115,7 +1180,7 @@ class SD1main(Application):
       c = 3
       r = 0
       for e in range(3):
-        #f.createTitle((c, r), 'Envelope 1', columnspan=env1ColumnSpan)
+        #f.createTitle((c, r), f'Envelope {e+1}', columnspan=env1ColumnSpan)
         env = f.createCanvas((c, r+1), size=(500,100), columnspan=envColSpan)
         envVars = [[0, 127, 100, 127, 50], [5, 99, 25, 50, 20]]
         envContext = tk.Menu(f.frame, tearoff=0)
@@ -1178,6 +1243,8 @@ class SD1main(Application):
       f.createCGap(c, 15)
     
   def loadParameters(self, params):
+    self.programName.set(params['program']['name'])
+    
     self.glideTime.set(params['programControl']['glideTime'])
     self.bendRange.set(params['programControl']['bendRange'])
     self.restrikeDelay.set(params['programControl']['restrikeDelay'])
@@ -1195,7 +1262,7 @@ class SD1main(Application):
       voice.pitchModSource.set(params[f'voice{v}']['pitchMod']['modSource'])
       voice.pitchModAmount.set(params[f'voice{v}']['pitchMod']['modAmount'])
       
-      voice.filter1Type.set(params[f'voice{v}']['filters']['filter1']['type'])
+      #voice.filter1Type.set(params[f'voice{v}']['filters']['filter1']['type'])
       voice.filter1Cutoff.set(params[f'voice{v}']['filters']['filter1']['cutoff'])
       voice.filter1ModAmount.set(params[f'voice{v}']['filters']['filter1']['modAmount'])
       voice.filter1ModSource.set(params[f'voice{v}']['filters']['filter1']['modSource'])
@@ -1213,7 +1280,7 @@ class SD1main(Application):
       voice.volumeModSource.set(params[f'voice{v}']['output']['volumeModSource'])
       voice.volumeKeyboardTrack.set(params[f'voice{v}']['output']['keyboardScaleAmount'])
       
-      voice.panS.set(params[f'voice{v}']['output']['pan'])
+      voice.panS.set(params[f'voice{v}']['output']['pan'] - 64)
       voice.panModAmount.set(params[f'voice{v}']['output']['panModAmount'])
       voice.panModSource.set(params[f'voice{v}']['output']['panModSource'])
       
@@ -1223,10 +1290,20 @@ class SD1main(Application):
       voice.velocityThreshold.set(params[f'voice{v}']['output']['velocityThreshold'])
       voice.glideMode.set(params[f'voice{v}']['pitchMod']['glideMode'])
       
-      #.set(params[f'voice{v}']['modMixer']['shape'])
-      #.set(params[f'voice{v}']['modMixer']['modSource1'])
-      #.set(params[f'voice{v}']['modMixer']['scaler'])
-      #.set(params[f'voice{v}']['modMixer']['modSource2'])
+      voice.mixerSource1.set(params[f'voice{v}']['modMixer']['modSource1'])
+      voice.mixerSource2.set(params[f'voice{v}']['modMixer']['modSource2'])
+      voice.mixerShape.set(params[f'voice{v}']['modMixer']['shape'])
+      voice.mixerScaler.set(params[f'voice{v}']['modMixer']['scaler'])
+      
+      voice.lfoRate.set(params[f'voice{v}']['lfo']['rate'])
+      voice.lfoRateModAmount.set(params[f'voice{v}']['lfo']['rateModAmount'])
+      voice.lfoRateModSource.set(params[f'voice{v}']['lfo']['rateModSource'])
+      voice.lfoDepth.set(params[f'voice{v}']['lfo']['depth'])
+      voice.lfoDepthModSource.set(params[f'voice{v}']['lfo']['depthModSource'])
+      voice.lfoDelay.set(params[f'voice{v}']['lfo']['delay'])
+      voice.lfoWave.set(params[f'voice{v}']['lfo']['waveshape'])
+      voice.lfoRestart.set(params[f'voice{v}']['lfo']['restart'])
+      voice.noiseSourceRate.set(params[f'voice{v}']['lfo']['noiseSourceRate'])
       
       voice.waveformWave.set(params[f'voice{v}']['wave']['waveform']['waveName'])
       

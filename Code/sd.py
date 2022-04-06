@@ -52,7 +52,6 @@ class SD():
         'type': 0,
         'sampledWave': {
           'pageOffset': 0,
-          'waveform': 'wave.sampledWave',
           'waveName': [0, 0, 0],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
@@ -62,7 +61,6 @@ class SD():
         },
         'transwave': {
           'pageOffset': 1,
-          'waveform': 'wave.transwave',
           'waveName': [0, 0, 63],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
@@ -72,15 +70,13 @@ class SD():
         },
         'waveform': {
           'pageOffset': 2,
-          'waveform': 'wave.waveform',
           'waveName': [0, 0, 84],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
         },
         'multiWave': {
           'pageOffset': 3,
-          'waveform': 'wave.multiwave',
-          'waveName': [0, 0, 0],
+          'waveName': [0, 0, 108],
           'waveClass':[0, 1, 0],
           'delayTime':[0, 2, 0],
           'loopWaveStart': [0, 3, 0],
@@ -108,7 +104,7 @@ class SD():
         'filter1': {
           'pageOffset': 0,
           'type': [0, 0, 0],
-          'cutoff': [0, 1, 0],
+          'cutoff': [0, 1, 127],
           'keyboardTrack': [0, 2, 0],
           'modSource': [0, 3, 15],
           'modAmount': [0, 4, 0],
@@ -126,13 +122,13 @@ class SD():
       },
       'output': {
         'pageOffset': 9,
-        'volume': [0, 0, 0],
+        'volume': [0, 0, 127],
         'volumeModSource': [0, 1, 15],
         'volumeModAmount': [0, 2, 0],
         'keyboardScaleAmount': [0, 3, 0],
         'scalingKeyStart': [0, 5, 36],
         'scalingKeyEnd': [0, 5, 96],
-        'destination': [1, 2, 1],
+        'destination': [1, 2, 0],
         'pan':  [1, 3, 64],
         'panModSource': [1, 4, 15],
         'panModAmount': [1, 5, 0],
@@ -241,6 +237,9 @@ class SD():
         'systemExclusiveEnable': [1, 4, 1],
         'programChangeEnable': [1, 5, 1]
       },
+      'program': {
+        'name': 'Init',
+      },
       'programControl': {
         'pageOffset': 5,
         'pitchTableEnable': [0, 1, 0],
@@ -346,6 +345,8 @@ class SD():
     elif name == 'allSequenceMemoryDump':           return [EST, ensoniqID, vfxFamilyID, sdID, self.channel, 0x00, 0x00, 0x0C, 'dataSize', EOX]
     elif name == 'currentSequenceDumpRequest':      return [EST, ensoniqID, vfxFamilyID, sdID, self.channel, 0x00, 0x00, 0x0D, EOX]
     elif name == 'allSequenceDumpRequest':          return [EST, ensoniqID, vfxFamilyID, sdID, self.channel, 0x00, 0x00, 0x0E, EOX]
+    elif name == 'programDump':                     return [EST, ensoniqID, vfxFamilyID, sdID, self.channel, 0x02, 'data', EOX]
+    elif name == 'allProgramsDump':                 return [EST, ensoniqID, vfxFamilyID, sdID, self.channel, 0x03, 'data', EOX]
 
   # def queueSysex(self, sysex):
   #   self.operationQueue.append(lambda sd, sysex=sysex: midi.sendSysex(sd.output, sysex))
@@ -371,16 +372,23 @@ class SD():
       sysex[i:i+1] = value
     return sysex, i
 
-  # def getWaveClass(self, wave):
-  #   if wave < 15: return 0
-  #   elif wave < 23: return 1
-  #   elif wave < 29: return 2
-  #   elif wave < 34: return 3
-  #   elif wave < 47: return 4
-  #   elif wave < 63: return 5
-  #   elif wave < 80: return 6
-  #   elif wave < 103: return 7
-  #   elif wave < 108: return 8
+  def getWaveClass(self, wave):
+    if wave < 15: return 0
+    elif wave < 23: return 1
+    elif wave < 29: return 2
+    elif wave < 34: return 3
+    elif wave < 47: return 4
+    elif wave < 63: return 5
+    elif wave < 80: return 6
+    elif wave < 103: return 7
+    elif wave < 108: return 8
+    elif wave == 108: return 9
+    elif wave < 125: return 10
+    elif wave < 141: return 11
+    elif wave < 150: return 12
+    elif wave < 161: return 13
+    elif wave < 167: return 14
+    elif wave == 167: return 15
 
   def encode8Bit(self, value):
     return [(value & 0xf0) >> 4, value & 0x0f]
@@ -425,13 +433,13 @@ class SD():
 
   def pressButton(self, buttonId):
     sysexDown = self.getSysexTemplate('pressButton')
-    sysexDown, _ = self.replace(sysexDown, 'button', self.encode8Bit(buttonId))
+    sysexDown, _ = self.replace(sysexDown, 'button', self.encode8Bit(buttonId.value))
     
     sysexUp   = self.getSysexTemplate('pressButton')
-    sysexUp, _ = self.replace(sysexUp, 'button', self.encode8Bit(buttonId+96))
+    sysexUp, _ = self.replace(sysexUp, 'button', self.encode8Bit(buttonId.value+96))
     
     if self.debug: 
-      print(f'{self.trans}Virtual button {buttonNames[buttonId]}')
+      print(f'{self.trans}Virtual button {buttonNames[buttonId.value]}')
       print(f'{self.info}Down')
     self.send(sysexDown)
     
@@ -454,11 +462,9 @@ class SD():
       if len(key) > 5 and key[0:5] == 'voice': voice = int(key[5])
       param = param[key]
       if type(param) is dict: pageOffset += param['pageOffset']
-    
-    if type(param) == str and 'wave' in param:
-      t = param.split('.')[1]
-      #self.changeParameter(f'voice{voice}.wave.{t}.waveClass', self.getWaveClass(value))
-      self.changeParameter(f'voice{voice}.wave.{t}.waveName', value)
+      
+    if type(param) is not list:
+      param = value
       return
     
     if value == param[2] and not force: return
@@ -503,6 +509,8 @@ class SD():
       apply = lambda x: recursive_map(x)
       if isinstance(data, Mapping):
         return ({k: apply(v) for k, v in data.items()})
+      elif type(data) is str:
+        return data
       elif isinstance(data, Collection):
         return data[2]
       else:
@@ -522,6 +530,7 @@ class SD():
     self.params['programControl']['delayMultiplier'][2] = (values[515] & 0xf0) >> 4
     self.params['programControl']['bendRange'][2] = values[515] & 0x0f
     self.params['programControl']['restrikeDelay'][2] = values[516]
+    self.params['program']['name'] = ''.join(map(chr, values[498:509]))
     
     for v in range(6):
       self.params['selectVoice'][f'voice{v}Status'][2] = (values[509] & (0b1 << v)) >> v
@@ -529,7 +538,7 @@ class SD():
       vO = v * 83
       for e in range(3):
         eO = e * 14
-        self.params[f'voice{v}']['envelopes'][f'env{e}']['initialLevel'][2] = values[vO+eO+ 0]-128 if e == 0 else values[vO+eO+ 0]
+        self.params[f'voice{v}']['envelopes'][f'env{e}']['initialLevel'][2] = values[vO+eO+ 0]-128 if values[vO+eO+ 0] >= 128 else values[vO+eO+ 0]
         self.params[f'voice{v}']['envelopes'][f'env{e}']['attackTime'][2] = values[vO+eO+ 1]
         self.params[f'voice{v}']['envelopes'][f'env{e}']['peakLevel'][2] = values[vO+eO+ 2]
         self.params[f'voice{v}']['envelopes'][f'env{e}']['decay1Time'][2] = values[vO+eO+ 3]
@@ -557,9 +566,7 @@ class SD():
       self.params[f'voice{v}']['pitchMod']['modSource'][2] = values[vO+ 47] & 0x0f
       self.params[f'voice{v}']['pitchMod']['modAmount'][2] = neg(values[vO+ 48])
 
-      #filterMode = values[vO+ 52] ???? collisions
-      #self.params[f'voice{v}']['filters'][f'filter1']['type'][2] = filterMode
-      #self.params[f'voice{v}']['filters'][f'filter2']['type'][2] = filterMode
+      self.params[f'voice{v}']['filters'][f'filter2']['type'][2] = values[vO + 52]>>4
       for f in range(2):
         fO = f * 5
         self.params[f'voice{v}']['filters'][f'filter{f+1}']['cutoff'][2] = values[vO+fO+ 49]
@@ -629,3 +636,163 @@ class SD():
         self.params[f'voice{v}']['wave']['sampledWave']['delayTime'][2] = values[vO+ 79]
     
     self.updateGUI = True
+    
+  def saveProgramDump(self):
+    d = []
+    
+    def combine(high, low):
+      return (high << 4) + low
+    
+    for v in range(6):
+      for e in range(3):
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['initialLevel'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['attackTime'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['peakLevel'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['decay1Time'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['breakpoint1Level'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['decay2Time'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['breakpoint2Level'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['decay3Time'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['sustainLevel'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['releaseTime'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['levelVelocitySens'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['attackTimeVelocitySens'][2])
+        d.append(self.params[f'voice{v}']['envelopes'][f'env{e}']['keyboardTrack'][2])
+        d.append(combine(
+          self.params[f'voice{v}']['envelopes'][f'env{e}']['mode'][2],
+          self.params[f'voice{v}']['envelopes'][f'env{e}']['velocityCurve'][2]))
+        
+      d.append(self.params[f'voice{v}']['pitch']['octave'][2] * 12 + self.params[f'voice{v}']['pitch']['semitone'][2])
+      d.append(self.params[f'voice{v}']['pitch']['fineTune'][2])
+      d.append(self.params[f'voice{v}']['pitch']['pitchTable'][2])
+      d.append(self.params[f'voice{v}']['pitchMod']['env1ModAmount'][2])
+      d.append(self.params[f'voice{v}']['pitchMod']['lfoModAmount'][2])
+      d.append(combine(
+        self.params[f'voice{v}']['pitchMod']['glideMode'][2],
+        self.params[f'voice{v}']['pitchMod']['modSource'][2]))
+      d.append(self.params[f'voice{v}']['pitchMod']['modAmount'][2])
+      d.append(self.params[f'voice{v}']['filters']['filter1']['cutoff'][2])
+      d.append(self.params[f'voice{v}']['filters']['filter1']['keyboardTrack'][2])
+      d.append(self.params[f'voice{v}']['filters']['filter1']['env2ModAmount'][2])
+      d.append(combine(
+        self.params[f'voice{v}']['filters']['filter2']['type'][2],
+        self.params[f'voice{v}']['filters']['filter1']['modSource'][2]))
+      d.append(self.params[f'voice{v}']['filters']['filter1']['modAmount'][2])
+      d.append(self.params[f'voice{v}']['filters']['filter2']['cutoff'][2])
+      d.append(self.params[f'voice{v}']['filters']['filter2']['keyboardTrack'][2])
+      d.append(self.params[f'voice{v}']['filters']['filter2']['env2ModAmount'][2])
+      d.append(self.params[f'voice{v}']['filters']['filter2']['modSource'][2])
+      d.append(self.params[f'voice{v}']['filters']['filter2']['modAmount'][2])
+      d.append(self.params[f'voice{v}']['output']['keyboardScaleAmount'][2])
+      d.append(self.params[f'voice{v}']['output']['scalingKeyStart'][2])
+      d.append(self.params[f'voice{v}']['output']['scalingKeyEnd'][2])
+      d.append((self.params[f'voice{v}']['output']['preGain'][2] << 7) + self.params[f'voice{v}']['output']['volume'][2])
+      d.append(combine(
+        self.params[f'voice{v}']['output']['panModSource'][2],
+        self.params[f'voice{v}']['output']['volumeModSource'][2]))
+      d.append(self.params[f'voice{v}']['output']['volumeModAmount'][2])
+      d.append(self.params[f'voice{v}']['output']['pan'][2])
+      d.append(self.params[f'voice{v}']['output']['panModAmount'][2])
+      d.append(combine(
+        self.params[f'voice{v}']['output']['priority'][2],
+        self.params[f'voice{v}']['output']['destination'][2]))
+      d.append(combine(
+        self.params[f'voice{v}']['lfo']['waveshape'][2],
+        self.params[f'voice{v}']['lfo']['depthModSource'][2]))
+      d.append(self.params[f'voice{v}']['lfo']['depth'][2])
+      d.append(combine(
+        self.params[f'voice{v}']['lfo']['restart'][2],
+        self.params[f'voice{v}']['lfo']['rateModSource'][2]))
+      d.append(self.params[f'voice{v}']['lfo']['rateModAmount'][2])
+      d.append(self.params[f'voice{v}']['lfo']['rate'][2])
+      d.append(self.params[f'voice{v}']['lfo']['delay'][2])
+      
+      ty = self.params[f'voice{v}']['wave']['type']
+      if ty == 0:
+        d.append(self.params[f'voice{v}']['wave']['waveform']['waveName'][2])
+        d.append(combine(
+          self.getWaveClass(self.params[f'voice{v}']['wave']['waveform']['waveName'][2]),
+          0))
+        d.append(0)
+        d.append(0)
+      elif ty == 1:
+        d.append(self.params[f'voice{v}']['wave']['transwave']['waveName'][2])
+        d.append(combine(
+          self.getWaveClass(self.params[f'voice{v}']['wave']['transwave']['waveName'][2]),
+          self.params[f'voice{v}']['wave']['transwave']['waveModSource'][2]))
+        d.append(self.params[f'voice{v}']['wave']['transwave']['waveModAmount'][2])
+        d.append(self.params[f'voice{v}']['wave']['transwave']['waveStart'][2])
+      elif ty == 2:
+        d.append(self.params[f'voice{v}']['wave']['sampledWave']['waveName'][2])
+        d.append(combine(
+          self.getWaveClass(self.params[f'voice{v}']['wave']['sampledWave']['waveName'][2]),
+          self.params[f'voice{v}']['wave']['sampledWave']['waveDirection'][2]))
+        d.append(self.params[f'voice{v}']['wave']['sampledWave']['waveVelocityStartMod'][2])
+        d.append(self.params[f'voice{v}']['wave']['sampledWave']['waveStartIndex'][2])
+      elif ty == 3:
+        d.append(self.params[f'voice{v}']['wave']['multiWave']['waveName'][2])
+        d.append(combine(
+          9,
+          self.params[f'voice{v}']['wave']['multiWave']['loopDirection'][2]))
+        d.append(self.params[f'voice{v}']['wave']['multiWave']['loopLength'][2])
+        d.append(self.params[f'voice{v}']['wave']['multiWave']['loopWaveStart'][2])
+        
+      d.append(self.params[f'voice{v}']['lfo']['noiseSourceRate'][2])
+      d.append(self.params[f'voice{v}']['wave']['waveform']['delayTime'][2])
+    
+      d.append(combine(
+        self.params[f'voice{v}']['modMixer']['shape'][2],
+        self.params[f'voice{v}']['modMixer']['modSource1'][2]))
+      d.append(combine(
+        self.params[f'voice{v}']['modMixer']['scaler'][2],
+        self.params[f'voice{v}']['modMixer']['modSource2'][2]))
+      
+      d.append(self.params[f'voice{v}']['output']['velocityThreshold'][2])
+        
+    name = self.params['program']['name']
+    while len(name) < 11:
+        name += ' '
+    nameList = list(map(ord, name[0:11]))
+    for c in nameList:
+      d.append(c)
+      
+    d.append(
+      (self.params['selectVoice']['voice0Status'][2] > 0) +
+      ((self.params['selectVoice']['voice1Status'][2] > 0) << 1) + 
+      ((self.params['selectVoice']['voice2Status'][2] > 0) << 2) + 
+      ((self.params['selectVoice']['voice3Status'][2] > 0) << 3) + 
+      ((self.params['selectVoice']['voice4Status'][2] > 0) << 4) + 
+      ((self.params['selectVoice']['voice5Status'][2] > 0) << 5))
+    d.append(0)
+    d.append(0)
+    d.append(0)
+    d.append(self.params['programControl']['pitchTableEnable'][2])
+    d.append(self.params['programControl']['glideTime'][2])
+    d.append(combine(
+      self.params['programControl']['delayMultiplier'][2],
+      self.params['programControl']['bendRange'][2]))
+    d.append(self.params['programControl']['restrikeDelay'][2])
+    d.append(0)
+    d.append(0)
+    for i in range(8):
+      d.append(0) #fx
+    d.append(0)
+    d.append(0)
+    d.append(0)
+    
+    sysex = self.getSysexTemplate('programDump')
+    sysex = sysex[0:-2]
+    
+    for v in d:
+      hi, lo = self.encode8Bit(v)
+      sysex.append(hi)
+      sysex.append(lo)
+      
+    sysex.append(EOX)
+    
+    if self.debug: 
+      print(f'{self.trans}Uploading program \'{name}\'')
+    
+    self.send(sysex)
+    t.delay(1)
+    self.pressButton(Button.SOFT3)
