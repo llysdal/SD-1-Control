@@ -35,8 +35,7 @@ gui.loadParameters(sd.getParameters())
 #Startup sysex handling (handle all of the queue)
 connectionEstablished, sysexBuffer = sd.establishCommunications()
 if not connectionEstablished:
-  input('...')
-  exit()
+  sd.decouple()
 
 
 def updateTask(sysexBuffer):

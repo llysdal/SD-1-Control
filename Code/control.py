@@ -5,6 +5,8 @@ from math import exp
 import wave, struct
 import json
 from copy import deepcopy
+import os
+curDir = os.path.dirname(os.path.abspath(__file__))[0:-4]
 
 midiKeys = []
 for o in range(-1, 10):
@@ -342,6 +344,27 @@ class SD1main(Application):
     self.init(master, background)
     self.setup(sd)
     
+  def saveProgram(self):
+    file = filedialog.asksaveasfile(title='Save Program', filetypes=[('Program', '.pgm')], defaultextension='.pgm', initialdir=curDir+'Data/Programs')
+    print(f'{self.sd.transDecoupled}Saving program...')
+    if file:
+      json.dump(self.sd.params, file)
+      file.close()
+      print(f'{self.sd.endNoRecv}Saved successfully')
+    else:
+      print(f'{self.sd.alrt}Failed to save program')
+    
+  def loadProgram(self):
+    file = filedialog.askopenfile(title='Load Program', filetypes=[('Program', '.pgm')], initialdir=curDir+'Data/Programs')
+    print(f'{self.sd.transDecoupled}Loading program...')
+    if file:
+      self.sd.params = json.load(file)
+      file.close()
+      self.loadParameters(self.sd.getParameters())
+      print(f'{self.sd.endNoRecv}Loaded successfully')
+    else:
+      print(f'{self.sd.alrt}Failed to load program')
+          
   def envDrag(self, event, voice, env, step):
     v = self.voices[voice]
     envVars = v.envVars[env]
@@ -435,6 +458,8 @@ class SD1main(Application):
     
     v = self.voices[voice]
     v.envVars[env] = deepcopy(self.envelopeCopy)
+    for step in range(6):
+      self.emitEnv(None, voice, env, step)
 
   def onVoiceStatusChange(self, voice, status):
     if self.isChangingVoiceStatus: return
@@ -466,20 +491,23 @@ class SD1main(Application):
     self.menu = self.createMenu()
     
     systemmenu = tk.Menu(self.menu, tearoff=0)
-    systemmenu.add_command(label="Bank 0", command=lambda sd=sd: sd.pressButton(0))
-    systemmenu.add_command(label="Master", command=lambda sd=sd: sd.pressButton(22))
     self.menu.add_cascade(label='System', menu=systemmenu)
     
     self.menu.add_command(label="\u22EE", activebackground=self.menu.cget("background"), state=tk.DISABLED)
 
     programmenu = tk.Menu(self.menu, tearoff=0)
-    programmenu.add_command(label='Request current', command=lambda sd=sd: sd.requestCurrentProgram())
-    programmenu.add_command(label='Send current', command=lambda sd=sd: sd.saveProgramDump())
+    programmenu.add_command(label='Request current', command = self.sd.requestCurrentProgram)
+    programmenu.add_command(label='Send current', command = self.sd.saveProgramDump)
+    programmenu.add_separator()
+    programmenu.add_command(label='Save Program',   command = self.saveProgram)
+    programmenu.add_command(label='Load Program',   command = self.loadProgram)
     self.menu.add_cascade(label='Programs', menu=programmenu)
     
     self.menu.add_command(label="\u22EE", activebackground=self.menu.cget("background"), state=tk.DISABLED)
     
     optionmenu = tk.Menu(self.menu, tearoff=0)
+    optionmenu.add_command(label='Decouple',   command = self.sd.decouple)
+    optionmenu.add_command(label='Couple',   command = self.sd.couple)
     self.menu.add_cascade(label='Options', menu=optionmenu)
 
     self.createRGap(0, 5)

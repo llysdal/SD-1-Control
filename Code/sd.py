@@ -302,7 +302,7 @@ class SD():
       else: 
         break
     if not received:
-      print(f'{self.alrt}Communications failed!')
+      print(f'{self.alrt}Communications failed!\n')
       return False, []
     
     self.channel = identitySysex[2]
@@ -312,16 +312,20 @@ class SD():
     print(f'{self.info}{model}')
     print(f'{self.info}OS Version {version}')
     print(f'{self.info}Channel {self.channel+1}')
-    print(f'{self.recv}Communication established!\n')    
+    print(f'{self.recv}Communication established!\n')
      
     return received, sysexBuffer
   
   def decouple(self):
+    print('SD-1 Decoupled!')
+    if self.linebreakRecv: print()
     self.decoupled = True
     self.trans = self.transDecoupled
     self.transNoExp = self.transNoExpDecoupled
     
   def couple(self):
+    print('SD-1 Coupled!')
+    if self.linebreakRecv: print()
     self.decoupled = False
     self.trans = self.transNormal
     self.transNoExp = self.transNoExpNormal
@@ -410,16 +414,22 @@ class SD():
         commandType = sysex[6] + sysex[7] << 4
         if commandType == 0x02:
           print(f'{self.recv}Edit buffer desync!')
+          if self.linebreakRecv: print()
       elif messageType == 0x01 and self.debug:
         if sysex[6] == 0x04:
           print(f'{self.recv}Acknowledge')
+          if self.linebreakRecv: print()
         else:
           print(f'{self.alrt}{("No Acknowledgement", "Invalid Parameter Number", "Invalid Parameter Value", "Invalid Button Number")[sysex[7]]}')
+          if self.linebreakRecv: print()
       elif messageType == 0x02:
-        if self.debug: print(f'{self.recv}Received program dump')
+        if self.debug: 
+          print(f'{self.recv}Received program dump')
+          if self.linebreakRecv: print()
         self.loadProgramDump(sysex[6:-1])
       else:
         print(f'{self.alrt}Unknown message')
+        if self.linebreakRecv: print()
       
       if self.debug and self.linebreakRecv: print()
 
@@ -427,7 +437,8 @@ class SD():
     sysex = self.getSysexTemplate('currentProgramDumpRequest')
     
     if self.debug: 
-      print(f'{self.trans}Requesting current program')
+      print(f'{self.transNoExp}Requesting current program')
+      if self.linebreakRecv: print()
       
     self.send(sysex)
 
@@ -447,6 +458,7 @@ class SD():
     
     if self.debug:
       print(f'{self.endNoRecv}Up')
+      if self.linebreakRecv: print()
     self.send(sysexUp)
 
     if self.debug and self.linebreakRecv: print()
@@ -475,7 +487,7 @@ class SD():
     sysex, _ = self.replace(sysex, 'slot', self.encode8Bit(param[1]))
     sysex, _ = self.replace(sysex, 'value', self.encode16Bit(value))
     
-    if self.debug: 
+    if self.debug and self.logParameterChanges: 
       print(f'{self.trans}Parameter change {parameter} to {value}')
       print(f'{self.endNoRecv}Voice {voice}, Page {pageOffset+param[0]}, Slot {param[1]}')
       if self.linebreakRecv: print()
@@ -791,7 +803,7 @@ class SD():
     sysex.append(EOX)
     
     if self.debug: 
-      print(f'{self.trans}Uploading program \'{name}\'')
+      print(f'{self.transNoExp}Uploading program {name}')
     
     self.send(sysex)
     t.delay(1)
