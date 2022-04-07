@@ -120,7 +120,7 @@ class Application():
 
     return slider
 
-  def createMenuButton(self, gridpos, sticky = E+S, columnspan=1, width=10, value=0, command=None, disabled=False):    
+  def createMenuButton(self, gridpos, sticky = E+S, columnspan=1, width=10, value=0, command=None, disabled=False, helperImage=None, helperShow=None, helperHide=None):    
     labelVar = tk.StringVar(value='default')
     var = tk.IntVar(value=value)
     
@@ -132,6 +132,10 @@ class Application():
     
     if command:
       var.trace_add("write", lambda x, y, z, var=var: command(var.get()))
+      
+    if helperImage:
+      menubutton.bind("<Button-3>", lambda event: helperShow(event, helperImage))
+      menubutton.bind("<ButtonRelease-3>", lambda event: helperHide(event))
 
     return menu, var, labelVar
   
@@ -370,32 +374,35 @@ class SD1main(Application):
     envVars = v.envVars[env]
     
     rectSize = 4
-    w = 500-rectSize
+    stepSpacing = 25
+    w = 500-rectSize - (stepSpacing*4)
     h = 100
     if step == 0:
       envVars[0][0] = min(127, max(0, 127 - int(event.y/h * 127)))
     elif step == 1:
+      offset = stepSpacing
       envVars[0][1] = min(127, max(0, 127 - int(event.y/h * 127)))
-      envVars[1][0] = min(99, max(0, int((event.x-rectSize)/(w/6) * 99)))
+      envVars[1][0] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     elif step == 2:
-      offset = w/6*envVars[1][0]/99
+      offset = w/6*envVars[1][0]/99 + stepSpacing*step
       envVars[0][2] = min(127, max(0, 127 - int(event.y/h * 127)))
       envVars[1][1] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     elif step == 3:
-      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99
+      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99 + stepSpacing*step
       envVars[0][3] = min(127, max(0, 127 - int(event.y/h * 127)))
       envVars[1][2] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     elif step == 4:
-      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99 + w/6*envVars[1][2]/99
+      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99 + w/6*envVars[1][2]/99 + stepSpacing*step
       envVars[0][4] = min(127, max(0, 127 - int(event.y/h * 127)))
       envVars[1][3] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     elif step == 5:
-      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99 + w/6*envVars[1][2]/99 + w/6*envVars[1][3]/99 + w/6
+      offset = w/6*envVars[1][0]/99 + w/6*envVars[1][1]/99 + w/6*envVars[1][2]/99 + w/6*envVars[1][3]/99 + w/6  + stepSpacing*4
       envVars[1][4] = min(99, max(0, int(((event.x-rectSize)-offset)/(w/6) * 99)))
     
   def updateEnvs(self):
     rectSize = 4
-    w = 500-rectSize
+    stepSpacing = 25
+    w = 500-rectSize - (stepSpacing*4)
     h = 100
     
     for voice in self.voices:
@@ -404,7 +411,7 @@ class SD1main(Application):
         
         lastPoint = (rectSize,0)
         for step, (level, duration) in enumerate(zip([*envVars[0], 0], [0, *envVars[1]])):
-          newPoint = (lastPoint[0] + w/6*duration/99, (h-rectSize)-(h-rectSize*2)*level/127)
+          newPoint = (lastPoint[0] + w/6*duration/99 + (stepSpacing if step > 0 else 0), (h-rectSize)-(h-rectSize*2)*level/127)
           if step == 5:
             line = env.find_withtag(f'line{step-1}')
             env.itemconfigure(line, fill=color)
@@ -421,7 +428,7 @@ class SD1main(Application):
           
           if step > 0: 
             durText = env.find_withtag(f'duration{step-1}')
-            env.coords(durText, (newPoint[0]-lastPoint[0])/2+lastPoint[0], (newPoint[1]-lastPoint[1])/2+lastPoint[1])
+            env.coords(durText, (newPoint[0]-lastPoint[0])/2+lastPoint[0], min(max((newPoint[1]-lastPoint[1])/2+lastPoint[1], 15), h-15))
             try: sDur = f'{envTimes[duration]}s'
             except: sDur = 'err'
             env.itemconfigure(durText, text=sDur)
@@ -460,6 +467,20 @@ class SD1main(Application):
     v.envVars[env] = deepcopy(self.envelopeCopy)
     for step in range(6):
       self.emitEnv(None, voice, env, step)
+
+  def copyVoice(self):
+    if not self.voiceCopy:
+      self.voiceContext.entryconfig("Paste", state=tk.ACTIVE)
+
+    self.voiceCopy = deepcopy(self.sd.params[f'voice{self.selectedVoice}'])
+    
+  def pasteVoice(self):
+    if not self.voiceCopy: 
+      return
+    
+    self.sd.params[f'voice{self.selectedVoice}'] = deepcopy(self.voiceCopy)
+    self.loadParameters(self.sd.getParameters())
+    self.sd.saveProgramDump()
 
   def onVoiceStatusChange(self, voice, status):
     if self.isChangingVoiceStatus: return
@@ -526,7 +547,42 @@ class SD1main(Application):
     voice3Frame, voice3Tab = programFrame.createTab(programTabs, 'Voice 4')
     voice4Frame, voice4Tab = programFrame.createTab(programTabs, 'Voice 5')
     voice5Frame, voice5Tab = programFrame.createTab(programTabs, 'Voice 6')
-    #programTabs.select(voice0Tab)
+    
+    self.voiceCopy = None
+    self.voiceContext = tk.Menu(programFrame.frame, tearoff=0)
+    self.voiceContext.add_command(label='Copy', command=self.copyVoice)
+    self.voiceContext.add_command(label='Paste', state=tk.DISABLED, command=self.pasteVoice)
+    self.selectedVoice = -1
+    def voiceContextMenu(event, menu):
+      tab = programTabs.tk.call(programTabs._w, "identify", "tab", event.x, event.y)
+      if type(tab) is str or tab < 1 or tab > 6: return
+      try: 
+        self.selectedVoice = tab - 1
+        menu.tk_popup(event.x_root, event.y_root)
+      finally: 
+        menu.grab_release()
+    programTabs.bind("<Button-3>", lambda event, menu=self.voiceContext: voiceContextMenu(event, menu))
+    
+    self.parameterHelperWindow = tk.Toplevel(self.master)
+    self.parameterHelperWindow.title('SD-1 Parameter Helper')
+    self.parameterHelperWindow.iconbitmap(fh.getRessourcePath('sd.ico'))
+    self.parameterHelperWindow.resizable(False, False)
+    self.parameterHelper = Application()
+    self.parameterHelper.init(self.parameterHelperWindow, self.background)
+    self.parameterHelper.image = self.parameterHelper.createText((0,0), '', sticky=N+S+E+W)
+    self.parameterHelper.resizableC(0)
+    self.parameterHelper.resizableR(0)
+    
+    self.parameterHelperWindow.withdraw()
+    def showParameterHelper(event, picture):
+      self.parameterHelper.imgRef = tk.PhotoImage(file=fh.getRessourcePath(picture+'.gif'))
+      self.parameterHelper.image.configure(image=self.parameterHelper.imgRef)
+      w, h = self.parameterHelper.imgRef.width(), self.parameterHelper.imgRef.height()
+      self.parameterHelperWindow.geometry(f'{w}x{h}+{int(event.x_root-w/2)}+{int(event.y_root-h/2)}')
+      self.parameterHelperWindow.deiconify()
+    def hideParameterHelper(event):
+      self.parameterHelperWindow.withdraw()
+    
     
     selectorWidth = 25
     sectionGap = 20
@@ -1163,7 +1219,7 @@ class SD1main(Application):
       f.lfoDelay = f.lfo.createSlider((5, 1), (0, 99), start = 0, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.delay', int(x)))
       f.lfo.createSmallText((5, 2), 'Delay')
       f.lfoRestart = f.lfo.createToggleButton((5, 3), f'Restart', sticky=E+W+N, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.restart', x))
-      lfoWave, f.lfoWave, lfoWaveLabel = f.lfo.createMenuButton((5, 4), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.lfo.waveshape', x), width=25)
+      lfoWave, f.lfoWave, lfoWaveLabel = f.lfo.createMenuButton((5, 4), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.lfo.waveshape', x), helperImage='lfoshapes', helperShow=showParameterHelper, helperHide=hideParameterHelper, width=25)
       f.lfo.createMenuButtonOptions(lfoWave, ['Triangle', 'Sine', 'Sine/Tri', 'Pos/Sin', 'Pos/Tri', 'Saw', 'Square'], f.lfoWave, lfoWaveLabel)
       f.lfo.createSmallText((5, 5), 'Waveshape')
       
@@ -1185,7 +1241,7 @@ class SD1main(Application):
       f.mixer.createMenuButtonOptions(mixerScaler, ['0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0', '1.5', '2.0', '3.0', '4.0', '6.0', '8.0'], f.mixerScaler, mixerScalerLabel)
       f.mixer.createSmallText((3, 2), 'Scaler')
       f.mixer.createCGap(4, 10) #gap
-      mixerShape, f.mixerShape, mixerShapeLabel = f.mixer.createMenuButton((5, 1), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.modMixer.shape', x), width=25)
+      mixerShape, f.mixerShape, mixerShapeLabel = f.mixer.createMenuButton((5, 1), sticky=S, command=lambda x, v=v: sd.changeParameter(f'voice{v}.modMixer.shape', x), helperImage='modmixershapes', helperShow=showParameterHelper, helperHide=hideParameterHelper, width=25)
       f.mixer.createMenuButtonOptions(mixerShape, ['Quick Rise', 'Convex 1', 'Convex 2', 'Convex 3', 'Linear', 'Concave 1', 'Concave 2', 'Concave 3', 'Concave 4', 'Late Rise', 'Quantize 32', 'Quantize 16', 'Quantize 8', 'Quantize 4', 'Quantize 2', 'Smoother'], f.mixerShape, mixerShapeLabel)
       f.mixer.createSmallText((5, 2), 'Shape')
       f.noiseSourceRate = f.mixer.createSlider((3, 3), (0, 127), start = 0,  columnspan=3, sticky=S+E+W, command=lambda x, v=v, sd=sd:sd.changeParameter(f'voice{v}.lfo.noiseSourceRate', int(x)))
@@ -1233,24 +1289,24 @@ class SD1main(Application):
         envParams.createCGap(0, 3)
         envExtras = []
         envExtras.append(
-          envParams.createSlider((1, 0), (0, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.attackTimeVelocitySens', int(x))))
+          envParams.createSlider((1, 0), (0, 127), start = 0, width=18, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.attackTimeVelocitySens', int(x))))
         envParams.createSmallText((1, 1), 'Atk. Vel. Sens.')
         envParams.resizableC(1)
         envParams.createCGap(2, 3)
         envExtras.append(
-          envParams.createSlider((3, 0), (0, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.levelVelocitySens', int(x))))
+          envParams.createSlider((3, 0), (0, 127), start = 0, width=18, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.levelVelocitySens', int(x))))
         envParams.createSmallText((3, 1), 'Lvl. Vel. Sens.')
         envParams.resizableC(3)
         envParams.createCGap(4, 3)
         envExtras.append(
-          envParams.createSlider((5, 0), (0, 9), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.velocityCurve', int(x))))
-        envParams.createSmallText((5, 1), 'Vel. Curve')
+          envParams.createSlider((5, 0), (-127, 127), start = 0, width=18, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.keyboardTrack', int(x))))
+        envParams.createSmallText((5, 1), 'Kbd. Track')
         envParams.resizableC(5)
         envParams.createCGap(6, 3)
-        envExtras.append(
-          envParams.createSlider((7, 0), (-127, 127), start = 0, sticky = W+E+N, command=lambda x, v=v, e=e, sd=sd:sd.changeParameter(f'voice{v}.envelopes.env{e}.keyboardTrack', int(x))))
-        envParams.createSmallText((7, 1), 'Kbd. Track')
-        envParams.resizableC(7)
+        velocityCurve, velocityCurveVar, velocityCurveLabel = envParams.createMenuButton((7, 0), sticky=W+E+S, command=lambda x, v=v, e=e: sd.changeParameter(f'voice{v}.envelopes.env{e}.velocityCurve', x), helperImage='velocitycurves', helperShow=showParameterHelper, helperHide=hideParameterHelper, width=15)
+        envParams.createMenuButtonOptions(velocityCurve, ['Quickrise', 'Convex 1', 'Convex 2', 'Convex 3', 'Linear', 'Concave 1', 'Concave 2', 'Concave 3', 'Concave 4', 'Late Rise'], velocityCurveVar, velocityCurveLabel)
+        envExtras.append(velocityCurveVar)
+        envParams.createSmallText((7, 1), 'Vel. Curve')
         envParams.createCGap(8, 3)
         
         f.envExtras.append(envExtras)
@@ -1270,7 +1326,7 @@ class SD1main(Application):
       
       f.createCGap(c, 15)
     
-  def loadParameters(self, params):
+  def loadParameters(self, params):    
     self.programName.set(params['program']['name'])
     
     self.glideTime.set(params['programControl']['glideTime'])
@@ -1375,8 +1431,8 @@ class SD1main(Application):
         voice.envModes[e].set(params[f'voice{v}']['envelopes'][f'env{e}']['mode'])
         voice.envExtras[e][0].set(params[f'voice{v}']['envelopes'][f'env{e}']['attackTimeVelocitySens'])
         voice.envExtras[e][1].set(params[f'voice{v}']['envelopes'][f'env{e}']['levelVelocitySens'])
-        voice.envExtras[e][2].set(params[f'voice{v}']['envelopes'][f'env{e}']['velocityCurve'])
-        voice.envExtras[e][3].set(params[f'voice{v}']['envelopes'][f'env{e}']['keyboardTrack'])
+        voice.envExtras[e][2].set(params[f'voice{v}']['envelopes'][f'env{e}']['keyboardTrack'])
+        voice.envExtras[e][3].set(params[f'voice{v}']['envelopes'][f'env{e}']['velocityCurve'])
     
     
 

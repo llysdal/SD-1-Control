@@ -437,8 +437,7 @@ class SD():
     sysex = self.getSysexTemplate('currentProgramDumpRequest')
     
     if self.debug: 
-      print(f'{self.transNoExp}Requesting current program')
-      if self.linebreakRecv: print()
+      print(f'{self.trans}Requesting current program')
       
     self.send(sysex)
 
